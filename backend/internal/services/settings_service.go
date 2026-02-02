@@ -1,0 +1,117 @@
+package services
+
+import (
+	"crypto/tls"
+	"errors"
+	"net/smtp"
+
+	"github.com/alpyxn/aeterna/backend/internal/database"
+	"github.com/alpyxn/aeterna/backend/internal/models"
+	"gorm.io/gorm"
+)
+
+type SettingsService struct{}
+
+func (s SettingsService) Get() (models.Settings, error) {
+	var settings models.Settings
+	result := database.DB.First(&settings)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return models.Settings{}, nil
+		}
+		return models.Settings{}, Internal("Failed to fetch settings", result.Error)
+	}
+	if settings.SMTPPass != "" {
+		decrypted, err := cryptoService.DecryptIfNeeded(settings.SMTPPass)
+		if err != nil {
+			return models.Settings{}, err
+		}
+		settings.SMTPPass = decrypted
+	}
+	return settings, nil
+}
+
+func (s SettingsService) Save(req models.Settings) error {
+	if req.SMTPPass != "" {
+		encrypted, err := cryptoService.EncryptIfNeeded(req.SMTPPass)
+		if err != nil {
+			return err
+		}
+		req.SMTPPass = encrypted
+	}
+	var existing models.Settings
+	result := database.DB.First(&existing)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			req.ID = 1
+			if err := database.DB.Create(&req).Error; err != nil {
+				return Internal("Failed to save settings", err)
+			}
+			return nil
+		}
+		return Internal("Failed to fetch settings", result.Error)
+	}
+
+	existing.SMTPHost = req.SMTPHost
+	existing.SMTPPort = req.SMTPPort
+	existing.SMTPUser = req.SMTPUser
+	existing.SMTPPass = req.SMTPPass
+	existing.SMTPFrom = req.SMTPFrom
+	existing.SMTPFromName = req.SMTPFromName
+
+	if err := database.DB.Save(&existing).Error; err != nil {
+		return Internal("Failed to save settings", err)
+	}
+
+	return nil
+}
+
+func (s SettingsService) TestSMTP(req models.Settings) error {
+	if req.SMTPHost == "" || req.SMTPPort == "" {
+		return BadRequest("SMTP host and port are required", nil)
+	}
+	if req.SMTPUser == "" || req.SMTPPass == "" {
+		return BadRequest("SMTP username and password are required for test", nil)
+	}
+
+	addr := req.SMTPHost + ":" + req.SMTPPort
+	tlsConfig := &tls.Config{ServerName: req.SMTPHost}
+
+	var client *smtp.Client
+	var err error
+
+	if req.SMTPPort == "465" {
+		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		if err != nil {
+			return BadRequest("Failed to connect (SSL)", err)
+		}
+		client, err = smtp.NewClient(conn, req.SMTPHost)
+		if err != nil {
+			conn.Close()
+			return BadRequest("Failed to create client", err)
+		}
+	} else {
+		client, err = smtp.Dial(addr)
+		if err != nil {
+			return BadRequest("Failed to connect", err)
+		}
+
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			if err := client.StartTLS(tlsConfig); err != nil {
+				client.Close()
+				return BadRequest("STARTTLS failed", err)
+			}
+		} else if req.SMTPPort == "587" {
+			client.Close()
+			return BadRequest("Server does not support STARTTLS on port 587", nil)
+		}
+	}
+	defer client.Close()
+
+	auth := smtp.PlainAuth("", req.SMTPUser, req.SMTPPass, req.SMTPHost)
+	if err := client.Auth(auth); err != nil {
+		return BadRequest("Authentication failed", err)
+	}
+
+	return nil
+}

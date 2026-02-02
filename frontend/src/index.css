@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+@theme {
+  --color-slate-950: #02040a;
+  --color-cyan-500: #06b6d4;
+  --color-purple-400: #c084fc;
+  --color-cyan-400: #22d3ee;
+  --color-fuchsia-500: #ec4899;
+  --color-emerald-400: #22c55e;
+  --color-amber-400: #f59e0b;
+  --color-rose-400: #fb7185;
+}
+
+:root {
+  --background: 224 71% 4%;
+  --foreground: 220 20% 98%;
+
+  --card: 224 61% 8%;
+  --card-foreground: 220 20% 98%;
+
+  --popover: 224 61% 8%;
+  --popover-foreground: 220 20% 98%;
+
+  --primary: 210 40% 98%;
+  --primary-foreground: 222.2 47.4% 1.2%;
+
+  --secondary: 222.2 47.4% 16%;
+  --secondary-foreground: 210 40% 98%;
+
+  --muted: 222.2 47.4% 14%;
+  --muted-foreground: 215.4 16.3% 70%;
+
+  --accent: 222.2 47.4% 18%;
+  --accent-foreground: 210 40% 98%;
+
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 210 40% 98%;
+
+  --border: 220 28% 24%;
+  --input: 220 28% 24%;
+  --ring: 212.7 26.8% 83.9%;
+}
+
+body {
+  @apply bg-[#03060f] text-slate-50 antialiased;
+  background-image:
+    radial-gradient(circle at 50% -20%, rgba(6, 182, 212, 0.28), transparent 55%),
+    radial-gradient(circle at 0% 100%, rgba(192, 132, 252, 0.22), transparent 45%),
+    radial-gradient(circle at 80% 20%, rgba(236, 72, 153, 0.18), transparent 40%),
+    radial-gradient(circle at 90% 70%, rgba(245, 158, 11, 0.14), transparent 45%);
+  background-attachment: fixed;
+}
+
+.glowing-card {
+  @apply relative overflow-hidden border border-slate-700/80 bg-slate-900/75 backdrop-blur-xl shadow-xl shadow-cyan-500/20;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glowing-card::before {
+  content: "";
+  @apply absolute -inset-px -z-10 bg-gradient-to-br from-cyan-400/40 via-transparent to-fuchsia-500/35 opacity-0 transition-opacity duration-500;
+}
+
+.glowing-card:hover::before {
+  @apply opacity-100;
+}
+
+.accent-badge {
+  @apply bg-cyan-500/20 text-cyan-300 border border-cyan-500/30;
+}
+
+.accent-badge--success {
+  @apply bg-emerald-400/15 text-emerald-300 border border-emerald-400/30;
+}
+
+.shimmer {
+  @apply relative overflow-hidden;
+}
+
+.shimmer::after {
+  content: '';
+  @apply absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/5 to-transparent;
+  animation: shimmer 2.5s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
