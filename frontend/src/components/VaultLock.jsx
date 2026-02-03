@@ -60,10 +60,12 @@ export default function VaultLock({ onUnlock }) {
             if (configured === false) {
                 if (!passwordStrength.isValid) {
                     setError('Please meet all password requirements.');
+                    setLoading(false);
                     return;
                 }
                 if (password !== confirmPassword) {
                     setError('Passwords do not match.');
+                    setLoading(false);
                     return;
                 }
                 await apiRequest('/setup', {

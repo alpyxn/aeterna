@@ -148,19 +148,27 @@ func triggerSwitch(msg models.Message) {
 
 	// Notify owner that the message was delivered
 	if settings.OwnerEmail != "" && settings.SMTPHost != "" {
-		sendOwnerNotification(settings, msg)
+		sendOwnerNotification(settings, msg, webhooks)
 	}
 }
 
-func sendOwnerNotification(settings models.Settings, msg models.Message) {
+func sendOwnerNotification(settings models.Settings, msg models.Message, webhooks []models.Webhook) {
+	webhookInfo := ""
+	if len(webhooks) > 0 {
+		webhookInfo = "\n\nTriggered Webhooks:\n"
+		for _, w := range webhooks {
+			webhookInfo += fmt.Sprintf("- %s\n", w.URL)
+		}
+	}
+
 	subject := "Message delivered"
 	body := fmt.Sprintf(`Your scheduled message has been delivered as planned.
 
-Recipient: %s
+Recipient: %s%s
 
 ---
 
-Sent by Aeterna`, msg.RecipientEmail)
+Sent by Aeterna`, msg.RecipientEmail, webhookInfo)
 
 	err := emailService.SendPlain(settings, settings.OwnerEmail, subject, body)
 	if err != nil {

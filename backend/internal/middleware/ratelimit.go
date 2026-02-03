@@ -30,8 +30,7 @@ func AuthRateLimiter(c *fiber.Ctx) error {
 	ip := c.IP()
 	
 	loginMutex.Lock()
-	defer loginMutex.Unlock()
-
+	
 	attempt, exists := loginAttempts[ip]
 	now := time.Now()
 
@@ -40,11 +39,13 @@ func AuthRateLimiter(c *fiber.Ctx) error {
 			Count:   0,
 			LastTry: now,
 		}
+		loginMutex.Unlock()
 		return c.Next()
 	}
 
 	// Check if currently locked
 	if now.Before(attempt.LockedUntil) {
+		loginMutex.Unlock()
 		remaining := attempt.LockedUntil.Sub(now).Seconds()
 		return c.Status(429).JSON(fiber.Map{
 			"error":            "Too many failed login attempts. Please try again later.",
@@ -58,6 +59,7 @@ func AuthRateLimiter(c *fiber.Ctx) error {
 		attempt.Count = 0
 	}
 
+	loginMutex.Unlock()
 	return c.Next()
 }
 

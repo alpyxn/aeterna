@@ -3,8 +3,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Mail, Server, Save, Loader2, CheckCircle, Eye, EyeOff, TestTube, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { Mail, Server, Save, Loader2, CheckCircle, Eye, EyeOff, TestTube, ChevronDown, ChevronUp, ExternalLink, Trash2 } from 'lucide-react';
 import { apiRequest } from "@/lib/api";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const SMTP_GUIDES = [
     {
@@ -125,8 +135,8 @@ export default function Settings() {
         ]));
     };
 
-    const updateWebhook = (index, patch) => {
-        setWebhooks(prev => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+    const updateWebhook = (index, patch, isDirty = true) => {
+        setWebhooks(prev => prev.map((item, i) => (i === index ? { ...item, ...patch, isDirty } : item)));
     };
 
     const saveWebhook = async (item, index) => {
@@ -140,13 +150,13 @@ export default function Settings() {
                     method: 'PUT',
                     body: JSON.stringify({ url: item.url, secret: item.secret, enabled: item.enabled })
                 });
-                updateWebhook(index, { ...updated, isNew: false });
+                updateWebhook(index, { ...updated, isNew: false, confirmingDelete: false }, false);
             } else {
                 const created = await apiRequest('/webhooks', {
                     method: 'POST',
                     body: JSON.stringify({ url: item.url, secret: item.secret, enabled: item.enabled })
                 });
-                updateWebhook(index, { ...created, isNew: false });
+                updateWebhook(index, { ...created, isNew: false, confirmingDelete: false }, false);
             }
             setError(null);
         } catch (e) {
@@ -154,7 +164,8 @@ export default function Settings() {
         }
     };
 
-    const deleteWebhook = async (item, index) => {
+    const deleteWebhook = async (index) => {
+        const item = webhooks[index];
         try {
             if (item.id) {
                 await apiRequest(`/webhooks/${item.id}`, {
@@ -403,7 +414,9 @@ export default function Settings() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="text-sm font-semibold text-white">Webhooks</div>
-                                <div className="text-xs text-dark-500">Each webhook can have its own secret</div>
+                                <div className="text-xs text-dark-500 mt-1">
+                                    When any of your switches are triggered, all enabled webhooks will be executed.
+                                </div>
                             </div>
                             <Button
                                 variant="outline"
@@ -428,32 +441,59 @@ export default function Settings() {
                             {webhooks.map((item, index) => (
                                 <div key={item.id ?? `new-${index}`} className="rounded-lg border border-dark-800 bg-dark-950/60 p-3 space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <label className="flex items-center gap-2 text-xs text-dark-400">
-                                            <input
-                                                type="checkbox"
-                                                checked={Boolean(item.enabled)}
-                                                onChange={(e) => updateWebhook(index, { enabled: e.target.checked })}
-                                                className="h-4 w-4 accent-teal-400"
-                                            />
-                                            Enabled
-                                        </label>
+                                        <div className="flex items-center gap-3">
+                                            <label className="flex items-center gap-2 text-xs text-dark-400">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={Boolean(item.enabled)}
+                                                    onChange={(e) => updateWebhook(index, { enabled: e.target.checked })}
+                                                    className="h-4 w-4 accent-teal-400"
+                                                />
+                                                Enabled
+                                            </label>
+                                            {item.isDirty && (
+                                                <span className="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 animate-pulse">
+                                                    Unsaved Changes
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-2">
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="border-dark-700 hover:bg-dark-800"
+                                                className={`transition-all ${item.isDirty ? 'border-teal-500 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20' : 'border-dark-700 hover:bg-dark-800'}`}
                                                 onClick={() => saveWebhook(item, index)}
                                             >
-                                                Save
+                                                {item.isDirty ? 'Save Changes' : 'Save'}
                                             </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="border-red-500/40 hover:bg-red-500/10"
-                                                onClick={() => deleteWebhook(item, index)}
-                                            >
-                                                Delete
-                                            </Button>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="border-red-500/40 hover:bg-red-500/10 text-red-400"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                                        Delete
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        This will permanently delete the webhook for <strong>{item.url || 'this endpoint'}</strong>.
+                                                        This action cannot be undone.
+                                                    </AlertDialogDescription>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction
+                                                            onClick={() => deleteWebhook(index)}
+                                                            className="bg-red-600 hover:bg-red-700"
+                                                        >
+                                                            Delete Webhook
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
                                         </div>
                                     </div>
 
