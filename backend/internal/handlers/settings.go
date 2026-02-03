@@ -6,7 +6,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-var settingsService = services.SettingsService{}
+// settingsService is defined in heartbeat.go
+
 
 func GetSettings(c *fiber.Ctx) error {
 	settings, err := settingsService.Get()

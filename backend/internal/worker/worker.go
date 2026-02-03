@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/alpyxn/aeterna/backend/internal/database"
@@ -19,8 +21,79 @@ func Start() {
 	defer ticker.Stop()
 
 	for range ticker.C {
+		checkReminders()
 		checkHeartbeats()
 	}
+}
+
+func checkReminders() {
+	settings, err := settingsService.Get()
+	if err != nil || settings.OwnerEmail == "" || settings.SMTPHost == "" {
+		return // No owner email or SMTP configured
+	}
+
+	var messages []models.Message
+	
+	// Find active messages where 50% of time has passed and reminder not sent
+	// last_seen + (trigger_duration * 0.5) < now AND reminder_sent = false
+	err = database.DB.Where(
+		"status = ? AND reminder_sent = ? AND last_seen < NOW() - (trigger_duration * INTERVAL '0.5 minute')",
+		models.StatusActive, false,
+	).Find(&messages).Error
+	
+	if err != nil {
+		slog.Error("Error checking reminders", "error", err)
+		return
+	}
+
+	for _, msg := range messages {
+		sendReminderEmail(settings, msg)
+	}
+}
+
+func sendReminderEmail(settings models.Settings, msg models.Message) {
+	// Calculate remaining time
+	lastSeen := msg.LastSeen
+	triggerTime := lastSeen.Add(time.Duration(msg.TriggerDuration) * time.Minute)
+	remaining := time.Until(triggerTime)
+
+	var remainingStr string
+	if remaining.Hours() > 24 {
+		days := int(remaining.Hours() / 24)
+		remainingStr = fmt.Sprintf("%d day(s)", days)
+	} else if remaining.Hours() > 1 {
+		remainingStr = fmt.Sprintf("%.0f hour(s)", remaining.Hours())
+	} else {
+		remainingStr = fmt.Sprintf("%.0f minute(s)", remaining.Minutes())
+	}
+
+	// Build quick heartbeat link
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:5173"
+	}
+	quickLink := fmt.Sprintf("%s/api/quick-heartbeat/%s", baseURL, settings.HeartbeatToken)
+
+	subject := "Check-in required"
+	body := fmt.Sprintf(`You have a scheduled message that will be sent in %s unless you confirm.
+
+Recipient: %s
+
+To confirm you are available, click the link below:
+%s
+
+---
+Sent by Aeterna`, remainingStr, msg.RecipientEmail, quickLink)
+
+	err := emailService.SendPlain(settings, settings.OwnerEmail, subject, body)
+	if err != nil {
+		slog.Error("Failed to send reminder email", "error", err, "owner", settings.OwnerEmail)
+		return
+	}
+
+	// Mark reminder as sent
+	database.DB.Model(&msg).Update("reminder_sent", true)
+	slog.Info("Reminder email sent", "owner", settings.OwnerEmail, "message_id", msg.ID)
 }
 
 func checkHeartbeats() {
@@ -72,4 +145,28 @@ func triggerSwitch(msg models.Message) {
 	// Update Status
 	msg.Status = models.StatusTriggered
 	database.DB.Save(&msg)
+
+	// Notify owner that the message was delivered
+	if settings.OwnerEmail != "" && settings.SMTPHost != "" {
+		sendOwnerNotification(settings, msg)
+	}
 }
+
+func sendOwnerNotification(settings models.Settings, msg models.Message) {
+	subject := "Message delivered"
+	body := fmt.Sprintf(`Your scheduled message has been delivered as planned.
+
+Recipient: %s
+
+---
+
+Sent by Aeterna`, msg.RecipientEmail)
+
+	err := emailService.SendPlain(settings, settings.OwnerEmail, subject, body)
+	if err != nil {
+		slog.Error("Failed to send owner notification", "error", err, "owner", settings.OwnerEmail)
+	} else {
+		slog.Info("Owner notified of delivery", "owner", settings.OwnerEmail, "recipient", msg.RecipientEmail)
+	}
+}
+

@@ -102,14 +102,26 @@ func (s AuthService) GetMasterHash() (string, error) {
 
 var validationService = ValidationService{}
 
-func (s AuthService) SetMasterPassword(password string) error {
+func (s AuthService) SetMasterPassword(password string, ownerEmail string) error {
 	if err := validationService.ValidatePassword(password); err != nil {
 		return err
+	}
+
+	if ownerEmail != "" {
+		if err := validationService.ValidateEmail(ownerEmail); err != nil {
+			return err
+		}
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return Internal("Failed to hash master password", err)
+	}
+
+	// Generate heartbeat token
+	heartbeatToken, err := cryptoService.GenerateToken(32)
+	if err != nil {
+		return Internal("Failed to generate heartbeat token", err)
 	}
 
 	var settings models.Settings
@@ -119,6 +131,8 @@ func (s AuthService) SetMasterPassword(password string) error {
 			settings = models.Settings{
 				ID:                 1,
 				MasterPasswordHash: string(hash),
+				OwnerEmail:         ownerEmail,
+				HeartbeatToken:     heartbeatToken,
 			}
 			if err := database.DB.Create(&settings).Error; err != nil {
 				return Internal("Failed to save master password", err)
@@ -129,11 +143,14 @@ func (s AuthService) SetMasterPassword(password string) error {
 	}
 
 	settings.MasterPasswordHash = string(hash)
+	settings.OwnerEmail = ownerEmail
+	settings.HeartbeatToken = heartbeatToken
 	if err := database.DB.Save(&settings).Error; err != nil {
 		return Internal("Failed to save master password", err)
 	}
 	return nil
 }
+
 
 func (s AuthService) VerifyMasterPassword(password string) error {
 	if password == "" {

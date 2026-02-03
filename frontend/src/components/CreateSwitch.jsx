@@ -25,6 +25,9 @@ export default function CreateSwitch() {
         { label: '1 Week', value: 10080 },
         { label: '2 Weeks', value: 20160 },
         { label: '1 Month', value: 43200 },
+        { label: '3 Months', value: 129600 },
+        { label: '6 Months', value: 259200 },
+        { label: '1 Year', value: 525600 },
     ];
 
     const handleCreate = async () => {

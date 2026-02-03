@@ -62,6 +62,14 @@ func main() {
 	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS webhook_enabled BOOLEAN DEFAULT FALSE;")
 	database.DB.Exec("UPDATE settings SET webhook_enabled = FALSE WHERE webhook_enabled IS NULL;")
 
+	// Owner email and heartbeat token columns
+	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS owner_email TEXT;")
+	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS heartbeat_token TEXT;")
+
+	// Reminder sent column for messages
+	database.DB.Exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;")
+	database.DB.Exec("UPDATE messages SET reminder_sent = FALSE WHERE reminder_sent IS NULL;")
+
 	app := fiber.New()
 
 	// Middleware
@@ -107,6 +115,9 @@ func main() {
 	api.Get("/auth/session", handlers.SessionStatus)
 	api.Post("/auth/logout", handlers.Logout)
 
+	// Quick heartbeat (no auth, token-based)
+	api.Get("/quick-heartbeat/:token", handlers.QuickHeartbeat)
+
 	// Protected Management
 	mgmt := api.Group("/", middleware.MasterAuth)
 	mgmt.Post("/messages", handlers.CreateMessage)
@@ -122,6 +133,7 @@ func main() {
 	mgmt.Get("/settings", handlers.GetSettings)
 	mgmt.Post("/settings", handlers.SaveSettings)
 	mgmt.Post("/settings/test", handlers.TestSMTP)
+	mgmt.Get("/heartbeat-token", handlers.GetHeartbeatToken)
 
 	// Start Background Worker
 	go worker.Start()

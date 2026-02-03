@@ -15,7 +15,7 @@ var emailCryptoService = CryptoService{}
 
 func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.Message) error {
 	to := msg.RecipientEmail
-	subject := "A Message Has Been Left For You"
+	subject := "A message for you"
 
 	content := msg.Content
 	if msg.Content != "" {
@@ -25,28 +25,21 @@ func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.
 		}
 		content = decrypted
 	}
-	body := fmt.Sprintf(`
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-</head>
-<body style="font-family: Arial, sans-serif; background-color: #0a0a0f; color: #e2e8f0; padding: 40px;">
-    <div style="max-width: 600px; margin: 0 auto; background-color: #1a1a2e; border-radius: 12px; padding: 40px; border: 1px solid #334155;">
-        <h1 style="color: #22d3ee; margin-bottom: 20px;">A Message For You</h1>
-        <p style="font-size: 14px; color: #64748b; margin-bottom: 20px;">
-            Someone has left you a message with instructions to deliver it at this time.
-        </p>
-        <div style="background-color: #0f172a; border-radius: 8px; padding: 24px; border-left: 4px solid #22d3ee; margin-bottom: 30px;">
-            <p style="font-size: 16px; line-height: 1.8; margin: 0; white-space: pre-wrap;">%s</p>
-        </div>
-        <p style="font-size: 12px; color: #475569; margin-top: 40px; text-align: center;">
-            This message was sent via Aeterna - Dead Man's Switch
-        </p>
-    </div>
-</body>
-</html>`, content)
+	body := fmt.Sprintf(`Someone has arranged for this message to be delivered to you.
 
+---
+
+%s
+
+---
+
+Sent by Aeterna`, content)
+
+	return s.SendPlain(settings, to, subject, body)
+}
+
+// SendPlain sends a plain text email
+func (s EmailService) SendPlain(settings models.Settings, to, subject, body string) error {
 	from := settings.SMTPFrom
 	if from == "" {
 		from = settings.SMTPUser
@@ -60,7 +53,7 @@ func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.
 	headers += fmt.Sprintf("To: %s\r\n", to)
 	headers += fmt.Sprintf("Subject: %s\r\n", subject)
 	headers += "MIME-Version: 1.0\r\n"
-	headers += "Content-Type: text/html; charset=UTF-8\r\n"
+	headers += "Content-Type: text/plain; charset=UTF-8\r\n"
 	headers += "\r\n"
 
 	message := []byte(headers + body)
@@ -75,6 +68,7 @@ func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.
 		return s.sendEmailSTARTTLS(settings, addr, from, to, message)
 	})
 }
+
 
 func (s EmailService) sendWithRetry(sendFn func() error) error {
 	const maxAttempts = 3

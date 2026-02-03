@@ -155,3 +155,12 @@ func (s CryptoService) DecryptIfNeeded(value string) (string, error) {
 	}
 	return value, nil
 }
+
+func (s CryptoService) GenerateToken(length int) (string, error) {
+	buf := make([]byte, length)
+	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
+		return "", Internal("Failed to generate token", err)
+	}
+	return base64.URLEncoding.EncodeToString(buf), nil
+}
+

@@ -16,6 +16,7 @@ const passwordRules = [
 export default function VaultLock({ onUnlock }) {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+    const [ownerEmail, setOwnerEmail] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [configured, setConfigured] = useState(null);
@@ -67,7 +68,7 @@ export default function VaultLock({ onUnlock }) {
                 }
                 await apiRequest('/setup', {
                     method: 'POST',
-                    body: JSON.stringify({ password })
+                    body: JSON.stringify({ password, owner_email: ownerEmail })
                 });
                 onUnlock();
             } else {
@@ -122,6 +123,18 @@ export default function VaultLock({ onUnlock }) {
                                         onChange={(e) => setConfirmPassword(e.target.value)}
                                         className="bg-dark-950 border-dark-700 h-11 text-center tracking-widest focus:border-teal-500 text-dark-100 placeholder:text-dark-500"
                                     />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-xs font-medium text-dark-400">Your Email (for reminders)</label>
+                                    <Input
+                                        type="email"
+                                        placeholder="your@email.com"
+                                        value={ownerEmail}
+                                        onChange={(e) => setOwnerEmail(e.target.value)}
+                                        className="bg-dark-950 border-dark-700 h-11 focus:border-teal-500 text-dark-100 placeholder:text-dark-500"
+                                    />
+                                    <p className="text-xs text-dark-500">You'll receive reminder emails when any switch needs attention</p>
                                 </div>
 
                                 {/* Password Strength Indicator */}

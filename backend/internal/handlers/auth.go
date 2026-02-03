@@ -10,7 +10,8 @@ import (
 )
 
 type passwordRequest struct {
-	Password string `json:"password"`
+	Password   string `json:"password"`
+	OwnerEmail string `json:"owner_email"`
 }
 
 var authService = services.AuthService{}
@@ -36,7 +37,7 @@ func SetupMasterPassword(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
-	if err := authService.SetMasterPassword(req.Password); err != nil {
+	if err := authService.SetMasterPassword(req.Password, req.OwnerEmail); err != nil {
 		return writeError(c, err)
 	}
 	if err := issueSessionCookie(c); err != nil {
