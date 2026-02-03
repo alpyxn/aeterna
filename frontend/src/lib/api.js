@@ -5,6 +5,7 @@ export async function apiRequest(path, options = {}) {
 	const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
 	const normalizedPath = path.startsWith("/") ? path : `/${path}`;
 	const response = await fetch(`${base}${normalizedPath}`, {
+		credentials: "include",
 		...rest,
 		headers: {
 			"Content-Type": "application/json",

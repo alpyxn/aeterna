@@ -65,7 +65,7 @@ const SMTP_GUIDES = [
     }
 ];
 
-export default function Settings({ masterKey }) {
+export default function Settings() {
     const [config, setConfig] = useState({
         smtp_host: '',
         smtp_port: '587',
@@ -81,18 +81,20 @@ export default function Settings({ masterKey }) {
     const [testSuccess, setTestSuccess] = useState(false);
     const [error, setError] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [webhooks, setWebhooks] = useState([]);
+    const [webhookLoading, setWebhookLoading] = useState(false);
+    const [showWebhookSecret, setShowWebhookSecret] = useState(false);
     const [showGuide, setShowGuide] = useState(false);
 
     useEffect(() => {
         fetchConfig();
+        fetchWebhooks();
     }, []);
 
     const fetchConfig = async () => {
         setConfigLoading(true);
         try {
-            const data = await apiRequest('/settings', {
-                headers: { 'X-Master-Key': masterKey }
-            });
+            const data = await apiRequest('/settings');
             if (data) {
                 setConfig(prev => ({ ...prev, ...data }));
             }
@@ -101,6 +103,67 @@ export default function Settings({ masterKey }) {
             setError('Failed to load settings');
         } finally {
             setConfigLoading(false);
+        }
+    };
+
+    const fetchWebhooks = async () => {
+        setWebhookLoading(true);
+        try {
+            const data = await apiRequest('/webhooks');
+            setWebhooks(Array.isArray(data) ? data : []);
+        } catch (e) {
+            setError(e.message || 'Failed to load webhooks');
+        } finally {
+            setWebhookLoading(false);
+        }
+    };
+
+    const addWebhook = () => {
+        setWebhooks(prev => ([
+            ...prev,
+            { id: null, url: '', secret: '', enabled: true, isNew: true }
+        ]));
+    };
+
+    const updateWebhook = (index, patch) => {
+        setWebhooks(prev => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+    };
+
+    const saveWebhook = async (item, index) => {
+        try {
+            if (!item.url) {
+                setError('Webhook URL is required');
+                return;
+            }
+            if (item.id) {
+                const updated = await apiRequest(`/webhooks/${item.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ url: item.url, secret: item.secret, enabled: item.enabled })
+                });
+                updateWebhook(index, { ...updated, isNew: false });
+            } else {
+                const created = await apiRequest('/webhooks', {
+                    method: 'POST',
+                    body: JSON.stringify({ url: item.url, secret: item.secret, enabled: item.enabled })
+                });
+                updateWebhook(index, { ...created, isNew: false });
+            }
+            setError(null);
+        } catch (e) {
+            setError(e.message || 'Failed to save webhook');
+        }
+    };
+
+    const deleteWebhook = async (item, index) => {
+        try {
+            if (item.id) {
+                await apiRequest(`/webhooks/${item.id}`, {
+                    method: 'DELETE'
+                });
+            }
+            setWebhooks(prev => prev.filter((_, i) => i !== index));
+        } catch (e) {
+            setError(e.message || 'Failed to delete webhook');
         }
     };
 
@@ -119,9 +182,6 @@ export default function Settings({ masterKey }) {
         try {
             await apiRequest('/settings', {
                 method: 'POST',
-                headers: {
-                    'X-Master-Key': masterKey
-                },
                 body: JSON.stringify(config)
             });
             setSaved(true);
@@ -144,9 +204,6 @@ export default function Settings({ masterKey }) {
         try {
             await apiRequest('/settings/test', {
                 method: 'POST',
-                headers: {
-                    'X-Master-Key': masterKey
-                },
                 body: JSON.stringify(config)
             });
             setTestSuccess(true);
@@ -161,43 +218,43 @@ export default function Settings({ masterKey }) {
     return (
         <div className="w-full max-w-2xl space-y-6">
             <div>
-                <h1 className="text-3xl font-black text-white">Settings</h1>
-                <p className="text-slate-500 text-sm">Configure email delivery and system options</p>
+                <h1 className="text-2xl font-semibold text-dark-100">Settings</h1>
+                <p className="text-dark-400 text-sm">Configure email delivery and system options</p>
             </div>
 
             {/* SMTP Guide */}
-            <Card className="border-slate-800 bg-slate-900/50">
+            <Card className="border-dark-700 bg-dark-900">
                 <button
                     className="w-full p-4 flex items-center justify-between text-left"
                     onClick={() => setShowGuide(!showGuide)}
                 >
                     <div>
-                        <h3 className="text-sm font-semibold text-white">Quick Setup Guide</h3>
-                        <p className="text-xs text-slate-500">Pre-configured settings for popular email providers</p>
+                        <h3 className="text-sm font-medium text-dark-100">Quick Setup Guide</h3>
+                        <p className="text-xs text-dark-500">Pre-configured settings for popular email providers</p>
                     </div>
-                    {showGuide ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
+                    {showGuide ? <ChevronUp className="w-5 h-5 text-dark-400" /> : <ChevronDown className="w-5 h-5 text-dark-400" />}
                 </button>
                 {showGuide && (
                     <div className="px-4 pb-4 space-y-2">
                         {SMTP_GUIDES.map(guide => (
-                            <div key={guide.name} className="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
+                            <div key={guide.name} className="flex items-center justify-between p-3 bg-dark-950 rounded-lg border border-dark-800">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="font-medium text-sm text-white">{guide.name}</span>
-                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${guide.security === 'SSL' ? 'bg-purple-500/20 text-purple-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
+                                        <span className="font-medium text-sm text-dark-100">{guide.name}</span>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${guide.security === 'SSL' ? 'bg-purple-500/20 text-purple-400' : 'bg-teal-500/20 text-teal-400'}`}>
                                             {guide.security}
                                         </span>
-                                        <a href={guide.link} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:text-cyan-300">
+                                        <a href={guide.link} target="_blank" rel="noopener noreferrer" className="text-teal-400 hover:text-teal-300">
                                             <ExternalLink className="w-3 h-3" />
                                         </a>
                                     </div>
-                                    <p className="text-xs text-slate-500 mt-0.5">{guide.host}:{guide.port}</p>
-                                    <p className="text-xs text-slate-600 mt-1">{guide.note}</p>
+                                    <p className="text-xs text-dark-400 mt-0.5">{guide.host}:{guide.port}</p>
+                                    <p className="text-xs text-dark-500 mt-1">{guide.note}</p>
                                 </div>
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    className="border-slate-700 hover:bg-slate-800 text-xs"
+                                    className="border-dark-700 hover:bg-dark-800 text-xs"
                                     onClick={() => applyGuide(guide)}
                                 >
                                     Apply
@@ -208,20 +265,20 @@ export default function Settings({ masterKey }) {
                 )}
             </Card>
 
-            <Card className="glowing-card border-slate-800">
+            <Card className="glowing-card">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                        <Mail className="w-5 h-5 text-cyan-400" />
+                    <CardTitle className="flex items-center gap-2 text-base font-medium">
+                        <Mail className="w-4 h-4 text-teal-400" />
                         SMTP Configuration
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-dark-400">
                         Configure your email server for sending triggered messages
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                            <label className="text-xs font-medium text-dark-400 flex items-center gap-2">
                                 <Server className="w-3 h-3" /> SMTP Host
                             </label>
                             <Input
@@ -233,12 +290,12 @@ export default function Settings({ masterKey }) {
                                     if (saved) setSaved(false);
                                     if (testSuccess) setTestSuccess(false);
                                 }}
-                                className="bg-slate-950 border-slate-800"
+                                className="bg-dark-950 border-dark-700 text-dark-100 placeholder:text-dark-500"
                                 aria-invalid={Boolean(error)}
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
                                 SMTP Port
                             </label>
                             <Input
@@ -250,7 +307,7 @@ export default function Settings({ masterKey }) {
                                     if (saved) setSaved(false);
                                     if (testSuccess) setTestSuccess(false);
                                 }}
-                                className="bg-slate-950 border-slate-800"
+                                className="bg-dark-950 border-dark-800"
                                 aria-invalid={Boolean(error)}
                             />
                         </div>
@@ -258,7 +315,7 @@ export default function Settings({ masterKey }) {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
                                 Username / Email
                             </label>
                             <Input
@@ -270,12 +327,12 @@ export default function Settings({ masterKey }) {
                                     if (saved) setSaved(false);
                                     if (testSuccess) setTestSuccess(false);
                                 }}
-                                className="bg-slate-950 border-slate-800"
+                                className="bg-dark-950 border-dark-800"
                                 aria-invalid={Boolean(error)}
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
                                 Password / App Password
                             </label>
                             <div className="relative">
@@ -289,13 +346,13 @@ export default function Settings({ masterKey }) {
                                         if (saved) setSaved(false);
                                         if (testSuccess) setTestSuccess(false);
                                     }}
-                                    className="bg-slate-950 border-slate-800 pr-10"
+                                    className="bg-dark-950 border-dark-800 pr-10"
                                     aria-invalid={Boolean(error)}
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300"
                                 >
                                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                 </button>
@@ -305,7 +362,7 @@ export default function Settings({ masterKey }) {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
                                 From Email
                             </label>
                             <Input
@@ -317,12 +374,12 @@ export default function Settings({ masterKey }) {
                                     if (saved) setSaved(false);
                                     if (testSuccess) setTestSuccess(false);
                                 }}
-                                className="bg-slate-950 border-slate-800"
+                                className="bg-dark-950 border-dark-800"
                                 aria-invalid={Boolean(error)}
                             />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
                                 From Name
                             </label>
                             <Input
@@ -334,9 +391,109 @@ export default function Settings({ masterKey }) {
                                     if (saved) setSaved(false);
                                     if (testSuccess) setTestSuccess(false);
                                 }}
-                                className="bg-slate-950 border-slate-800"
+                                className="bg-dark-950 border-dark-800"
                                 aria-invalid={Boolean(error)}
                             />
+                        </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-dark-800/70" />
+
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <div className="text-sm font-semibold text-white">Webhooks</div>
+                                <div className="text-xs text-dark-500">Each webhook can have its own secret</div>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-dark-700 hover:bg-dark-800"
+                                onClick={addWebhook}
+                                disabled={webhookLoading}
+                            >
+                                Add Webhook
+                            </Button>
+                        </div>
+
+                        {webhookLoading && (
+                            <div className="text-xs text-dark-500">Loading webhooks...</div>
+                        )}
+
+                        {webhooks.length === 0 && !webhookLoading && (
+                            <div className="text-xs text-dark-500">No webhooks configured.</div>
+                        )}
+
+                        <div className="space-y-3">
+                            {webhooks.map((item, index) => (
+                                <div key={item.id ?? `new-${index}`} className="rounded-lg border border-dark-800 bg-dark-950/60 p-3 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <label className="flex items-center gap-2 text-xs text-dark-400">
+                                            <input
+                                                type="checkbox"
+                                                checked={Boolean(item.enabled)}
+                                                onChange={(e) => updateWebhook(index, { enabled: e.target.checked })}
+                                                className="h-4 w-4 accent-teal-400"
+                                            />
+                                            Enabled
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="border-dark-700 hover:bg-dark-800"
+                                                onClick={() => saveWebhook(item, index)}
+                                            >
+                                                Save
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="border-red-500/40 hover:bg-red-500/10"
+                                                onClick={() => deleteWebhook(item, index)}
+                                            >
+                                                Delete
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
+                                            Webhook URL
+                                        </label>
+                                        <Input
+                                            placeholder="https://example.com/webhook"
+                                            value={item.url}
+                                            onChange={(e) => updateWebhook(index, { url: e.target.value })}
+                                            className="bg-dark-950 border-dark-800"
+                                            aria-invalid={Boolean(error)}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
+                                            Webhook Secret (optional)
+                                        </label>
+                                        <div className="relative">
+                                            <Input
+                                                type={showWebhookSecret ? "text" : "password"}
+                                                placeholder="••••••••"
+                                                value={item.secret}
+                                                onChange={(e) => updateWebhook(index, { secret: e.target.value })}
+                                                className="bg-dark-950 border-dark-800 pr-10"
+                                                aria-invalid={Boolean(error)}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300"
+                                            >
+                                                {showWebhookSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
@@ -373,7 +530,7 @@ export default function Settings({ masterKey }) {
                 <CardFooter className="flex gap-2">
                     <Button
                         variant="outline"
-                        className="border-slate-700 hover:bg-slate-800"
+                        className="border-dark-700 hover:bg-dark-800"
                         onClick={handleTest}
                         disabled={
                             testLoading ||
@@ -392,7 +549,7 @@ export default function Settings({ masterKey }) {
                         Test Connection
                     </Button>
                     <Button
-                        className="flex-1 bg-cyan-600 hover:bg-cyan-500"
+                        className="flex-1 bg-teal-600 hover:bg-teal-500"
                         onClick={handleSave}
                         disabled={loading || configLoading}
                     >

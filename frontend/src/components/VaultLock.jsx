@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
-import { ShieldAlert, Lock, ChevronRight, Loader2 } from 'lucide-react';
+import { Lock, ChevronRight, Loader2, Check, X } from 'lucide-react';
 import { apiRequest } from "@/lib/api";
+
+const passwordRules = [
+    { id: 'length', label: 'At least 8 characters', test: (p) => p.length >= 8 },
+    { id: 'upper', label: 'One uppercase letter', test: (p) => /[A-Z]/.test(p) },
+    { id: 'lower', label: 'One lowercase letter', test: (p) => /[a-z]/.test(p) },
+    { id: 'number', label: 'One number', test: (p) => /[0-9]/.test(p) },
+    { id: 'special', label: 'One special character (!@#$%^&*)', test: (p) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(p) },
+];
 
 export default function VaultLock({ onUnlock }) {
     const [password, setPassword] = useState('');
@@ -24,6 +32,24 @@ export default function VaultLock({ onUnlock }) {
         checkConfigured();
     }, []);
 
+    const passwordStrength = useMemo(() => {
+        const passed = passwordRules.filter(rule => rule.test(password));
+        return {
+            passed,
+            score: passed.length,
+            isValid: passed.length === passwordRules.length,
+            percentage: (passed.length / passwordRules.length) * 100,
+        };
+    }, [password]);
+
+    const strengthLabel = useMemo(() => {
+        if (password.length === 0) return { text: '', color: '' };
+        if (passwordStrength.score <= 2) return { text: 'Weak', color: 'bg-red-500' };
+        if (passwordStrength.score <= 3) return { text: 'Fair', color: 'bg-orange-500' };
+        if (passwordStrength.score <= 4) return { text: 'Good', color: 'bg-yellow-500' };
+        return { text: 'Strong', color: 'bg-teal-500' };
+    }, [password, passwordStrength.score]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -31,8 +57,8 @@ export default function VaultLock({ onUnlock }) {
 
         try {
             if (configured === false) {
-                if (password.length < 8) {
-                    setError('Master password must be at least 8 characters.');
+                if (!passwordStrength.isValid) {
+                    setError('Please meet all password requirements.');
                     return;
                 }
                 if (password !== confirmPassword) {
@@ -43,13 +69,13 @@ export default function VaultLock({ onUnlock }) {
                     method: 'POST',
                     body: JSON.stringify({ password })
                 });
-                onUnlock(password);
+                onUnlock();
             } else {
                 await apiRequest('/auth/verify', {
                     method: 'POST',
                     body: JSON.stringify({ password })
                 });
-                onUnlock(password);
+                onUnlock();
             }
         } catch (e) {
             setError(e.message || 'Invalid master credentials.');
@@ -59,19 +85,19 @@ export default function VaultLock({ onUnlock }) {
     };
 
     return (
-        <div className="w-full max-w-md animate-in fade-in zoom-in-95 duration-700">
-            <Card className="glowing-card border-none">
-                <CardHeader className="text-center">
-                    <div className="mx-auto w-12 h-12 bg-cyan-500/10 rounded-full flex items-center justify-center mb-4">
-                        <Lock className="w-6 h-6 text-cyan-500" />
+        <div className="w-full max-w-md">
+            <Card className="glowing-card">
+                <CardHeader className="text-center pb-4">
+                    <div className="mx-auto w-12 h-12 bg-dark-800 rounded-xl flex items-center justify-center mb-4">
+                        <Lock className="w-5 h-5 text-teal-400" />
                     </div>
-                    <CardTitle className="text-2xl font-black">AETERNA VAULT</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-xl font-semibold text-dark-100">Aeterna Vault</CardTitle>
+                    <CardDescription className="text-dark-400">
                         {configured === null
                             ? 'Checking security status...'
                             : configured === false
-                            ? 'Set a master password to secure your control center.'
-                            : 'Master authorization required to access control center.'}
+                                ? 'Set a master password to secure your control center.'
+                                : 'Enter your master password to continue.'}
                     </CardDescription>
                 </CardHeader>
                 <form onSubmit={handleSubmit}>
@@ -82,20 +108,64 @@ export default function VaultLock({ onUnlock }) {
                                 placeholder={configured === false ? 'Create Master Password' : 'Enter Master Password'}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="bg-slate-950 border-slate-800 h-12 text-center text-lg tracking-widest focus:ring-cyan-500/20"
+                                className="bg-dark-950 border-dark-700 h-11 text-center tracking-widest focus:border-teal-500 text-dark-100 placeholder:text-dark-500"
                                 autoFocus
                             />
                         </div>
                         {configured === false && (
-                            <div className="space-y-2">
-                                <Input
-                                    type="password"
-                                    placeholder="Confirm Master Password"
-                                    value={confirmPassword}
-                                    onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="bg-slate-950 border-slate-800 h-12 text-center text-lg tracking-widest focus:ring-cyan-500/20"
-                                />
-                            </div>
+                            <>
+                                <div className="space-y-2">
+                                    <Input
+                                        type="password"
+                                        placeholder="Confirm Master Password"
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        className="bg-dark-950 border-dark-700 h-11 text-center tracking-widest focus:border-teal-500 text-dark-100 placeholder:text-dark-500"
+                                    />
+                                </div>
+
+                                {/* Password Strength Indicator */}
+                                {password.length > 0 && (
+                                    <div className="space-y-3">
+                                        <div className="space-y-1.5">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-dark-500">Password Strength</span>
+                                                <span className={`font-medium ${strengthLabel.text === 'Strong' ? 'text-teal-400' :
+                                                    strengthLabel.text === 'Good' ? 'text-yellow-400' :
+                                                        strengthLabel.text === 'Fair' ? 'text-orange-400' :
+                                                            'text-red-400'
+                                                    }`}>{strengthLabel.text}</span>
+                                            </div>
+                                            <div className="h-1 bg-dark-800 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full transition-all duration-300 ${strengthLabel.color}`}
+                                                    style={{ width: `${passwordStrength.percentage}%` }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-1.5 pt-1">
+                                            {passwordRules.map(rule => {
+                                                const passed = rule.test(password);
+                                                return (
+                                                    <div
+                                                        key={rule.id}
+                                                        className={`flex items-center gap-2 text-xs transition-colors ${passed ? 'text-teal-400' : 'text-dark-500'
+                                                            }`}
+                                                    >
+                                                        {passed ? (
+                                                            <Check className="w-3 h-3" />
+                                                        ) : (
+                                                            <X className="w-3 h-3" />
+                                                        )}
+                                                        <span>{rule.label}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                         {error && (
                             <p className="text-xs text-red-400 text-center">{error}</p>
@@ -103,18 +173,18 @@ export default function VaultLock({ onUnlock }) {
                     </CardContent>
                     <CardFooter>
                         <Button
-                            className="w-full h-12 bg-cyan-600 hover:bg-cyan-500 text-white font-bold"
+                            className="w-full h-11 bg-teal-600 hover:bg-teal-500 text-white font-medium"
                             type="submit"
                             disabled={loading || configured === null || !password || (configured === false && !confirmPassword)}
                         >
-                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (configured === false ? "SET MASTER PASSWORD" : "UNLOCK CONTROL CENTER")}
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : (configured === false ? "Set Password" : "Unlock")}
                             {!loading && <ChevronRight className="w-4 h-4 ml-2" />}
                         </Button>
                     </CardFooter>
                 </form>
             </Card>
-            <p className="mt-8 text-center text-[10px] text-slate-600 uppercase tracking-[0.3em]">
-                Authorized Personnel Only
+            <p className="mt-6 text-center text-xs text-dark-500">
+                Authorized access only
             </p>
         </div>
     );

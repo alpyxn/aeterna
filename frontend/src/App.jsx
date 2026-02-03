@@ -4,27 +4,43 @@ import CreateSwitch from './components/CreateSwitch'
 import Dashboard from './components/Dashboard'
 import Settings from './components/Settings'
 import VaultLock from './components/VaultLock'
+import { apiRequest } from './lib/api'
 
 function App() {
   const [route, setRoute] = useState('home')
-  const [masterKey, setMasterKey] = useState(sessionStorage.getItem('aeterna_master_key'))
+  const [authorized, setAuthorized] = useState(false)
 
   useEffect(() => {
     const path = window.location.pathname;
     // No longer need to handle /view/ routes since we send content in email
   }, []);
 
-  const handleUnlock = (key) => {
-    setMasterKey(key);
-    sessionStorage.setItem('aeterna_master_key', key);
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const data = await apiRequest('/auth/session');
+        setAuthorized(Boolean(data?.authorized));
+      } catch {
+        setAuthorized(false);
+      }
+    };
+    checkSession();
+  }, []);
+
+  const handleUnlock = () => {
+    setAuthorized(true);
   };
 
-  const handleLogout = () => {
-    setMasterKey(null);
-    sessionStorage.removeItem('aeterna_master_key');
+  const handleLogout = async () => {
+    try {
+      await apiRequest('/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore logout errors
+    }
+    setAuthorized(false);
   };
 
-  const isLocked = !masterKey;
+  const isLocked = !authorized;
 
   return (
     <div className="min-h-screen">
@@ -34,23 +50,21 @@ function App() {
         onLogout={handleLogout}
       />
 
-      <main className="container mx-auto px-4 pt-32 pb-16 flex flex-col items-center">
+      <main className="container mx-auto px-4 pt-28 pb-16 flex flex-col items-center">
         {isLocked ? (
           <VaultLock onUnlock={handleUnlock} />
         ) : (
           <>
-            {route === 'home' && <CreateSwitch masterKey={masterKey} />}
-            {route === 'dashboard' && <Dashboard masterKey={masterKey} />}
-            {route === 'settings' && <Settings masterKey={masterKey} />}
+            {route === 'home' && <CreateSwitch />}
+            {route === 'dashboard' && <Dashboard />}
+            {route === 'settings' && <Settings />}
           </>
         )}
 
-        <div className="mt-12 text-slate-600 text-xs flex items-center gap-4">
-          <span>&copy; 2026 Aeterna Project</span>
-          <span className="w-1 h-1 rounded-full bg-slate-800" />
+        <div className="mt-12 text-dark-500 text-xs flex items-center gap-4">
+          <span>&copy; 2026 Aeterna</span>
+          <span className="w-1 h-1 rounded-full bg-dark-700" />
           <span>Dead Man's Switch</span>
-          <span className="w-1 h-1 rounded-full bg-slate-800" />
-          <span>Control Center {masterKey ? 'Authorized' : 'Restricted'}</span>
         </div>
       </main>
     </div>
