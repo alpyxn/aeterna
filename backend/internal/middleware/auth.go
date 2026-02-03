@@ -1,8 +1,9 @@
 package middleware
 
 import (
-	"errors"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/alpyxn/aeterna/backend/internal/services"
 	"github.com/gofiber/fiber/v2"
@@ -11,34 +12,69 @@ import (
 var authService = services.AuthService{}
 
 func MasterAuth(c *fiber.Ctx) error {
-	masterKey := os.Getenv("MASTER_PASSWORD")
-	clientKey := c.Get("X-Master-Key")
-	
-	// If no env password set, fall back to DB-stored master password.
-	if masterKey == "" {
-		if err := authService.VerifyMasterPassword(clientKey); err != nil {
-			var apiErr *services.APIError
-			if errors.As(err, &apiErr) {
-				return c.Status(apiErr.Status).JSON(fiber.Map{
-					"error": apiErr.Message,
-					"code":  apiErr.Code,
-				})
+	if token := c.Cookies("aeterna_session"); token != "" {
+		if err := authService.VerifySessionToken(token); err == nil {
+			if err := enforceOriginAllowlist(c); err != nil {
+				return err
 			}
-			return c.Status(401).JSON(fiber.Map{
-				"error": "Unauthorized access. Master key required.",
-				"code":  "unauthorized",
-			})
+			return c.Next()
 		}
-		return c.Next()
+		c.ClearCookie("aeterna_session")
 	}
 
-	if clientKey != masterKey {
-		return c.Status(401).JSON(fiber.Map{
-			"error": "Unauthorized access. Master key required.",
-			"code":  "unauthorized",
+	return c.Status(401).JSON(fiber.Map{
+		"error": "Unauthorized access. Session required.",
+		"code":  "unauthorized",
+	})
+}
+
+func enforceOriginAllowlist(c *fiber.Ctx) error {
+	origin := strings.TrimSpace(c.Get("Origin"))
+	
+	// Same-origin requests may not send Origin header
+	// In that case, check Referer or allow the request
+	if origin == "" {
+		referer := strings.TrimSpace(c.Get("Referer"))
+		if referer != "" {
+			parsed, err := url.Parse(referer)
+			if err == nil && parsed.Host != "" {
+				origin = parsed.Scheme + "://" + parsed.Host
+			}
+		}
+	}
+	
+	// If still no origin (same-origin fetch, curl, etc.), allow in development
+	if origin == "" {
+		if os.Getenv("ENV") != "production" {
+			return nil
+		}
+		return c.Status(403).JSON(fiber.Map{
+			"error": "Origin required",
+			"code":  "origin_required",
 		})
 	}
 
-	return c.Next()
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return c.Status(403).JSON(fiber.Map{
+			"error": "Invalid origin",
+			"code":  "invalid_origin",
+		})
+	}
+
+	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	if allowedOrigins == "" {
+		allowedOrigins = "http://localhost:5173"
+	}
+	for _, entry := range strings.Split(allowedOrigins, ",") {
+		if strings.TrimSpace(entry) == origin {
+			return nil
+		}
+	}
+
+	return c.Status(403).JSON(fiber.Map{
+		"error": "Origin not allowed",
+		"code":  "origin_not_allowed",
+	})
 }
 

@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"os"
+	"time"
+
+	"github.com/alpyxn/aeterna/backend/internal/middleware"
 	"github.com/alpyxn/aeterna/backend/internal/services"
 	"github.com/gofiber/fiber/v2"
 )
@@ -35,6 +39,9 @@ func SetupMasterPassword(c *fiber.Ctx) error {
 	if err := authService.SetMasterPassword(req.Password); err != nil {
 		return writeError(c, err)
 	}
+	if err := issueSessionCookie(c); err != nil {
+		return writeError(c, err)
+	}
 	return c.JSON(fiber.Map{"success": true})
 }
 
@@ -44,7 +51,59 @@ func VerifyMasterPassword(c *fiber.Ctx) error {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
 	if err := authService.VerifyMasterPassword(req.Password); err != nil {
+		// Record failed login attempt for rate limiting
+		middleware.RecordFailedLogin(c.IP())
+		return writeError(c, err)
+	}
+	// Record successful login to reset rate limit counter
+	middleware.RecordSuccessfulLogin(c.IP())
+	if err := issueSessionCookie(c); err != nil {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true})
+}
+
+func SessionStatus(c *fiber.Ctx) error {
+	token := c.Cookies("aeterna_session")
+	if err := authService.VerifySessionToken(token); err != nil {
+		return writeError(c, err)
+	}
+	return c.JSON(fiber.Map{"authorized": true})
+}
+
+func Logout(c *fiber.Ctx) error {
+	clearSessionCookie(c)
+	return c.JSON(fiber.Map{"success": true})
+}
+
+func issueSessionCookie(c *fiber.Ctx) error {
+	token, exp, err := authService.IssueSessionToken()
+	if err != nil {
+		return err
+	}
+	secure := os.Getenv("ENV") == "production"
+	c.Cookie(&fiber.Cookie{
+		Name:     "aeterna_session",
+		Value:    token,
+		Expires:  exp,
+		Path:     "/",
+		HTTPOnly: true,
+		Secure:   secure,
+		SameSite: fiber.CookieSameSiteStrictMode,
+	})
+	return nil
+}
+
+func clearSessionCookie(c *fiber.Ctx) {
+	secure := os.Getenv("ENV") == "production"
+	c.Cookie(&fiber.Cookie{
+		Name:     "aeterna_session",
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		Path:     "/",
+		HTTPOnly: true,
+		Secure:   secure,
+		SameSite: fiber.CookieSameSiteStrictMode,
+	})
 }

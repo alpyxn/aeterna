@@ -11,6 +11,8 @@ import (
 
 var settingsService = services.SettingsService{}
 var emailService = services.EmailService{}
+var webhookService = services.WebhookService{}
+var webhookStore = services.WebhookStore{}
 
 func Start() {
 	ticker := time.NewTicker(1 * time.Minute)
@@ -53,6 +55,18 @@ func triggerSwitch(msg models.Message) {
 		}
 	} else {
 		slog.Info("Mock email", "recipient", msg.RecipientEmail, "content", msg.Content)
+	}
+
+	webhooks, err := webhookStore.ListEnabled()
+	if err != nil {
+		slog.Error("Failed to load webhooks", "error", err)
+	} else if len(webhooks) > 0 {
+		slog.Info("Webhook delivery attempt", "count", len(webhooks), "recipient", msg.RecipientEmail)
+		if err := webhookService.SendTriggerWebhooks(webhooks, msg); err != nil {
+			slog.Error("Failed to deliver webhook", "error", err, "recipient", msg.RecipientEmail)
+		} else {
+			slog.Info("Webhook delivered", "count", len(webhooks), "recipient", msg.RecipientEmail)
+		}
 	}
 
 	// Update Status

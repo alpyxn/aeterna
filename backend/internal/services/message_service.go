@@ -13,16 +13,22 @@ import (
 type MessageService struct{}
 
 var cryptoService = CryptoService{}
+var msgValidationService = ValidationService{}
 
 func (s MessageService) Create(content, recipientEmail string, triggerDuration int) (models.Message, error) {
-	if triggerDuration < 1 || triggerDuration > 43200 {
-		return models.Message{}, BadRequest("Duration must be between 1 and 43200 minutes", nil)
+	// Validate trigger duration
+	if err := msgValidationService.ValidateTriggerDuration(triggerDuration); err != nil {
+		return models.Message{}, err
 	}
-	if content == "" {
-		return models.Message{}, BadRequest("Content is required", nil)
+
+	// Validate and sanitize content
+	if err := msgValidationService.ValidateContent(content); err != nil {
+		return models.Message{}, err
 	}
-	if recipientEmail == "" {
-		return models.Message{}, BadRequest("Recipient email is required", nil)
+
+	// Validate email format
+	if err := msgValidationService.ValidateEmail(recipientEmail); err != nil {
+		return models.Message{}, err
 	}
 
 	encrypted, err := cryptoService.Encrypt(content)

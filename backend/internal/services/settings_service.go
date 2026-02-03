@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"net/smtp"
+	"strings"
 
 	"github.com/alpyxn/aeterna/backend/internal/database"
 	"github.com/alpyxn/aeterna/backend/internal/models"
@@ -28,16 +29,41 @@ func (s SettingsService) Get() (models.Settings, error) {
 		}
 		settings.SMTPPass = decrypted
 	}
+	if settings.WebhookSecret != "" {
+		decrypted, err := cryptoService.DecryptIfNeeded(settings.WebhookSecret)
+		if err != nil {
+			return models.Settings{}, err
+		}
+		settings.WebhookSecret = decrypted
+	}
 	return settings, nil
 }
 
 func (s SettingsService) Save(req models.Settings) error {
+	req.WebhookURL = strings.TrimSpace(req.WebhookURL)
+	if req.WebhookEnabled && req.WebhookURL == "" {
+		return BadRequest("Webhook URL is required", nil)
+	}
+	if req.WebhookURL != "" {
+		validatedURL, err := validateWebhookURL(req.WebhookURL)
+		if err != nil {
+			return err
+		}
+		req.WebhookURL = validatedURL
+	}
 	if req.SMTPPass != "" {
 		encrypted, err := cryptoService.EncryptIfNeeded(req.SMTPPass)
 		if err != nil {
 			return err
 		}
 		req.SMTPPass = encrypted
+	}
+	if req.WebhookSecret != "" {
+		encrypted, err := cryptoService.EncryptIfNeeded(req.WebhookSecret)
+		if err != nil {
+			return err
+		}
+		req.WebhookSecret = encrypted
 	}
 	var existing models.Settings
 	result := database.DB.First(&existing)
@@ -58,6 +84,9 @@ func (s SettingsService) Save(req models.Settings) error {
 	existing.SMTPPass = req.SMTPPass
 	existing.SMTPFrom = req.SMTPFrom
 	existing.SMTPFromName = req.SMTPFromName
+	existing.WebhookURL = req.WebhookURL
+	existing.WebhookSecret = req.WebhookSecret
+	existing.WebhookEnabled = req.WebhookEnabled
 
 	if err := database.DB.Save(&existing).Error; err != nil {
 		return Internal("Failed to save settings", err)

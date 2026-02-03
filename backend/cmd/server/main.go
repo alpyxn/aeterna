@@ -35,7 +35,7 @@ func main() {
 	database.Connect()
 	
 	// Auto Migrate
-	database.DB.AutoMigrate(&models.Message{}, &models.Settings{})
+	database.DB.AutoMigrate(&models.Message{}, &models.Settings{}, &models.Webhook{})
 
 	// Ensure legacy schema constraints don't block inserts
 	database.DB.Exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS key_fragment TEXT;")
@@ -56,6 +56,11 @@ func main() {
 
 	// Ensure settings table has encryption key column
 	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS encryption_key TEXT;")
+	// Webhook settings columns
+	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS webhook_url TEXT;")
+	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS webhook_secret TEXT;")
+	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS webhook_enabled BOOLEAN DEFAULT FALSE;")
+	database.DB.Exec("UPDATE settings SET webhook_enabled = FALSE WHERE webhook_enabled IS NULL;")
 
 	app := fiber.New()
 
@@ -64,14 +69,19 @@ func main() {
 	app.Use(logger.New(logger.Config{
 		Format: "{\"time\":\"${time}\",\"ip\":\"${ip}\",\"status\":${status},\"method\":\"${method}\",\"path\":\"${path}\",\"latency\":\"${latency}\",\"req_id\":\"${locals:requestid}\"}\n",
 	}))
+	
+	// Security headers middleware
+	app.Use(middleware.SecurityHeaders)
+	
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
 		allowedOrigins = "http://localhost:5173"
 	}
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: allowedOrigins,
-		AllowHeaders: "Origin, Content-Type, Accept, X-Master-Key",
+		AllowHeaders: "Origin, Content-Type, Accept",
 		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+		AllowCredentials: true,
 	}))
 	app.Use(limiter.New(limiter.Config{
 		Max:        120,
@@ -91,7 +101,11 @@ func main() {
 	api.Get("/messages/:id", handlers.GetMessage)
 	api.Get("/setup/status", handlers.SetupStatus)
 	api.Post("/setup", handlers.SetupMasterPassword)
-	api.Post("/auth/verify", handlers.VerifyMasterPassword)
+	
+	// Auth endpoints with brute-force protection
+	api.Post("/auth/verify", middleware.AuthRateLimiter, handlers.VerifyMasterPassword)
+	api.Get("/auth/session", handlers.SessionStatus)
+	api.Post("/auth/logout", handlers.Logout)
 
 	// Protected Management
 	mgmt := api.Group("/", middleware.MasterAuth)
@@ -99,6 +113,10 @@ func main() {
 	mgmt.Get("/messages", handlers.ListMessages)
 	mgmt.Delete("/messages/:id", handlers.DeleteMessage)
 	mgmt.Post("/heartbeat", handlers.Heartbeat)
+	mgmt.Get("/webhooks", handlers.ListWebhooks)
+	mgmt.Post("/webhooks", handlers.CreateWebhook)
+	mgmt.Put("/webhooks/:id", handlers.UpdateWebhook)
+	mgmt.Delete("/webhooks/:id", handlers.DeleteWebhook)
 	
 	// Settings
 	mgmt.Get("/settings", handlers.GetSettings)
