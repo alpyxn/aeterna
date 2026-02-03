@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
-import { Mail, Clock, Loader2, Trash2, Heart, AlertCircle, RefreshCw, Inbox } from 'lucide-react';
+import { Mail, Clock, Loader2, Trash2, Heart, AlertCircle, RefreshCw, Inbox, Eye } from 'lucide-react';
 import { apiRequest } from "@/lib/api";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 export default function Dashboard() {
     const [messages, setMessages] = useState([]);
@@ -186,11 +187,39 @@ export default function Dashboard() {
                                     </div>
                                 </CardHeader>
                                 <CardContent className="space-y-3 pb-3">
-                                    <div className="bg-dark-950 p-3 rounded-lg border border-dark-800">
-                                        <div className="text-[10px] text-dark-500 uppercase tracking-wider mb-1">Message</div>
-                                        <div className="text-xs text-dark-300 line-clamp-2">
-                                            {message.content?.substring(0, 120)}{message.content?.length > 120 ? '...' : ''}
+                                    <div className="bg-dark-950 p-3 rounded-lg border border-dark-800 space-y-2">
+                                        <div className="text-[10px] text-dark-500 uppercase tracking-wider">Message</div>
+                                        <div className="relative">
+                                            <div className="text-xs text-dark-300 line-clamp-2">
+                                                {message.content?.substring(0, 120)}{message.content?.length > 120 ? '...' : ''}
+                                            </div>
+                                            {message.content?.length > 120 && (
+                                                <div className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-dark-950 to-transparent pointer-events-none" />
+                                            )}
                                         </div>
+
+                                        {message.content?.length > 120 && (
+                                            <div className="flex justify-start">
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <button className="flex items-center gap-1.5 px-3 py-1 bg-dark-800 border border-dark-600 rounded-lg text-[10px] text-teal-400 font-medium shadow-lg transition-all hover:bg-dark-700 hover:scale-105 active:scale-95">
+                                                            <Eye className="w-3 h-3" /> View Full Message
+                                                        </button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-2xl">
+                                                        <DialogHeader>
+                                                            <DialogTitle>Message Content</DialogTitle>
+                                                            <DialogDescription>
+                                                                Recipient: {message.recipient_email}
+                                                            </DialogDescription>
+                                                        </DialogHeader>
+                                                        <div className="mt-4 bg-dark-950 p-4 rounded-lg border border-dark-800 max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm text-dark-200">
+                                                            {message.content}
+                                                        </div>
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="bg-dark-950 p-3 rounded-lg border border-dark-800">
