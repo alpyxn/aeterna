@@ -1,0 +1,74 @@
+# Aeterna - Docker Compose for IP-only mode (no SSL)
+# Use this for testing or when you don't have a domain
+# Access via http://YOUR_IP:5000
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=host=db user=${DB_USER} password=${DB_PASS} dbname=${DB_NAME} port=5432 sslmode=disable
+      - ENV=production
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      - OWNER_EMAIL=${OWNER_EMAIL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Aeterna}
+    depends_on:
+      - db
+    restart: always
+    networks:
+      - aeterna-net
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - aeterna-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/api
+    ports:
+      - "5000:80"
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - aeterna-net
+
+  # Simple nginx to route /api to backend
+  proxy:
+    image: nginx:alpine
+    ports:
+      - "5000:80"
+    volumes:
+      - ./nginx-simple.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    restart: always
+    networks:
+      - aeterna-net
+
+volumes:
+  postgres_data:
+
+networks:
+  aeterna-net:
+    driver: bridge
