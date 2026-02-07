@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -30,6 +31,15 @@ func MasterAuth(c *fiber.Ctx) error {
 
 func enforceOriginAllowlist(c *fiber.Ctx) error {
 	origin := strings.TrimSpace(c.Get("Origin"))
+	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	
+	// Debug logging
+	slog.Info("Origin check", "origin", origin, "allowed", allowedOrigins, "referer", c.Get("Referer"))
+	
+	// Support wildcard for simple/testing mode - check first!
+	if allowedOrigins == "*" {
+		return nil
+	}
 	
 	// Same-origin requests may not send Origin header
 	// In that case, check Referer or allow the request
@@ -44,11 +54,9 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 	}
 	
 	// If still no origin (same-origin fetch, curl, etc.), allow in development
-	// For simple mode (HTTP), also allow since there's no domain verification anyway
 	if origin == "" {
 		env := os.Getenv("ENV")
-		allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
-		if env != "production" || allowedOrigins == "*" {
+		if env != "production" {
 			return nil
 		}
 		return c.Status(403).JSON(fiber.Map{
@@ -65,14 +73,8 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 		})
 	}
 
-	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
 	if allowedOrigins == "" {
 		allowedOrigins = "http://localhost:5173"
-	}
-	
-	// Support wildcard for simple/testing mode
-	if allowedOrigins == "*" {
-		return nil
 	}
 	
 	for _, entry := range strings.Split(allowedOrigins, ",") {
@@ -81,6 +83,7 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 		}
 	}
 
+	slog.Warn("Origin not allowed", "origin", origin, "allowed", allowedOrigins)
 	return c.Status(403).JSON(fiber.Map{
 		"error": "Origin not allowed",
 		"code":  "origin_not_allowed",
