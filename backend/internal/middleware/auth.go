@@ -44,8 +44,11 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 	}
 	
 	// If still no origin (same-origin fetch, curl, etc.), allow in development
+	// For simple mode (HTTP), also allow since there's no domain verification anyway
 	if origin == "" {
-		if os.Getenv("ENV") != "production" {
+		env := os.Getenv("ENV")
+		allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+		if env != "production" || allowedOrigins == "*" {
 			return nil
 		}
 		return c.Status(403).JSON(fiber.Map{
@@ -66,6 +69,12 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 	if allowedOrigins == "" {
 		allowedOrigins = "http://localhost:5173"
 	}
+	
+	// Support wildcard for simple/testing mode
+	if allowedOrigins == "*" {
+		return nil
+	}
+	
 	for _, entry := range strings.Split(allowedOrigins, ",") {
 		if strings.TrimSpace(entry) == origin {
 			return nil
