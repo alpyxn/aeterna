@@ -82,7 +82,10 @@ func issueSessionCookie(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	secure := os.Getenv("ENV") == "production"
+	// Only set Secure flag if actually using HTTPS
+	// This allows Simple mode (HTTP) to work while keeping HTTPS secure
+	isHTTPS := c.Protocol() == "https" || c.Get("X-Forwarded-Proto") == "https"
+	secure := os.Getenv("ENV") == "production" && isHTTPS
 	c.Cookie(&fiber.Cookie{
 		Name:     "aeterna_session",
 		Value:    token,
@@ -90,13 +93,14 @@ func issueSessionCookie(c *fiber.Ctx) error {
 		Path:     "/",
 		HTTPOnly: true,
 		Secure:   secure,
-		SameSite: fiber.CookieSameSiteStrictMode,
+		SameSite: fiber.CookieSameSiteLaxMode, // Lax allows cross-origin for redirects
 	})
 	return nil
 }
 
 func clearSessionCookie(c *fiber.Ctx) {
-	secure := os.Getenv("ENV") == "production"
+	isHTTPS := c.Protocol() == "https" || c.Get("X-Forwarded-Proto") == "https"
+	secure := os.Getenv("ENV") == "production" && isHTTPS
 	c.Cookie(&fiber.Cookie{
 		Name:     "aeterna_session",
 		Value:    "",
@@ -105,6 +109,6 @@ func clearSessionCookie(c *fiber.Ctx) {
 		Path:     "/",
 		HTTPOnly: true,
 		Secure:   secure,
-		SameSite: fiber.CookieSameSiteStrictMode,
+		SameSite: fiber.CookieSameSiteLaxMode,
 	})
 }
