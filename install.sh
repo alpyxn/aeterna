@@ -811,7 +811,9 @@ create_backup() {
 # Uninstall
 uninstall() {
     echo ""
-    echo -e "${RED}${BOLD}WARNING: This will remove Aeterna completely!${NC}"
+    echo -e "${RED}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${RED}${BOLD}  WARNING: This will remove Aeterna completely!${NC}"
+    echo -e "${RED}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     
     local install_path="${INSTALL_DIR:-/opt/aeterna}"
@@ -819,6 +821,20 @@ uninstall() {
     if [ ! -d "$install_path" ]; then
         error "No installation found at $install_path"
     fi
+    
+    # Show what will be removed
+    echo -e "  ${CYAN}The following will be removed:${NC}"
+    echo "  • Installation directory: $install_path"
+    echo "  • Docker containers and volumes"
+    echo "  • Docker images (aeterna-related)"
+    
+    # Check for nginx config
+    local nginx_available="/etc/nginx/sites-available/aeterna"
+    local nginx_enabled="/etc/nginx/sites-enabled/aeterna"
+    if [ -f "$nginx_available" ] || [ -L "$nginx_enabled" ]; then
+        echo "  • nginx configuration files"
+    fi
+    echo ""
     
     if prompt_yn "Create backup before uninstalling?" "y"; then
         INSTALL_DIR="$install_path"
@@ -830,18 +846,69 @@ uninstall() {
         exit 0
     fi
     
-    info "Stopping containers..."
+    echo ""
+    step "Stopping and removing Docker containers..."
     cd "$install_path"
     
-    # Try all compose files
-    docker compose -f docker-compose.prod.yml down -v 2>/dev/null || true
-    docker compose -f docker-compose.nginx.yml down -v 2>/dev/null || true
-    docker compose -f docker-compose.simple.yml down -v 2>/dev/null || true
+    # Stop and remove containers with volumes
+    docker compose -f docker-compose.prod.yml down -v --remove-orphans 2>/dev/null || true
+    docker compose -f docker-compose.nginx.yml down -v --remove-orphans 2>/dev/null || true
+    docker compose -f docker-compose.simple.yml down -v --remove-orphans 2>/dev/null || true
     
-    info "Removing installation directory..."
+    # Remove Docker images
+    step "Removing Docker images..."
+    local project_name=$(basename "$install_path")
+    docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${project_name}[-_]" | xargs -r docker rmi 2>/dev/null || true
+    docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "aeterna[-_]" | xargs -r docker rmi 2>/dev/null || true
+    
+    # Prune dangling images from this project
+    docker image prune -f 2>/dev/null || true
+    success "Docker cleanup complete"
+    
+    # Remove nginx configuration if exists
+    if [ -f "$nginx_available" ] || [ -L "$nginx_enabled" ]; then
+        step "Removing nginx configuration..."
+        
+        if [ -L "$nginx_enabled" ]; then
+            sudo rm -f "$nginx_enabled"
+            success "Removed $nginx_enabled"
+        fi
+        
+        if [ -f "$nginx_available" ]; then
+            sudo rm -f "$nginx_available"
+            success "Removed $nginx_available"
+        fi
+        
+        # Test and reload nginx if it's running
+        if pgrep -x "nginx" > /dev/null 2>&1; then
+            if sudo nginx -t 2>/dev/null; then
+                sudo systemctl reload nginx 2>/dev/null || sudo nginx -s reload 2>/dev/null || true
+                success "nginx reloaded"
+            fi
+        fi
+    fi
+    
+    # Remove installation directory
+    step "Removing installation directory..."
     sudo rm -rf "$install_path"
+    success "Removed $install_path"
     
-    success "Aeterna has been uninstalled."
+    # Summary
+    echo ""
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${GREEN}  Aeterna has been completely uninstalled!${NC}"
+    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    echo -e "  ${CYAN}Removed:${NC}"
+    echo "  ✓ Docker containers and volumes"
+    echo "  ✓ Docker images"
+    echo "  ✓ Installation directory ($install_path)"
+    if [ -f "$nginx_available" ] || [ -L "$nginx_enabled" ]; then
+        echo "  ✓ nginx configuration"
+    fi
+    echo ""
+    echo -e "  ${DIM}Note: Database backups (if created) are preserved.${NC}"
+    echo ""
 }
 
 # Check status
