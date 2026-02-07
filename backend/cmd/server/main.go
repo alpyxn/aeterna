@@ -86,12 +86,25 @@ func main() {
 	if allowedOrigins == "" {
 		allowedOrigins = "http://localhost:5173"
 	}
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: allowedOrigins,
-		AllowHeaders: "Origin, Content-Type, Accept",
-		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
-		AllowCredentials: true,
-	}))
+	
+	// For simple mode (ALLOWED_ORIGINS=*), use dynamic origin to avoid Fiber CORS panic
+	if allowedOrigins == "*" {
+		app.Use(cors.New(cors.Config{
+			AllowOriginsFunc: func(origin string) bool {
+				return true // Allow all origins in simple mode
+			},
+			AllowHeaders:     "Origin, Content-Type, Accept",
+			AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+			AllowCredentials: true,
+		}))
+	} else {
+		app.Use(cors.New(cors.Config{
+			AllowOrigins:     allowedOrigins,
+			AllowHeaders:     "Origin, Content-Type, Accept",
+			AllowMethods:     "GET, POST, PUT, DELETE, OPTIONS",
+			AllowCredentials: true,
+		}))
+	}
 	app.Use(limiter.New(limiter.Config{
 		Max:        120,
 		Expiration: 1 * time.Minute,
