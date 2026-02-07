@@ -4,6 +4,7 @@ import CreateSwitch from './components/CreateSwitch'
 import Dashboard from './components/Dashboard'
 import Settings from './components/Settings'
 import VaultLock from './components/VaultLock'
+import SecurityBanner from './components/SecurityBanner'
 import { apiRequest } from './lib/api'
 
 function App() {
@@ -44,6 +45,7 @@ function App() {
 
   return (
     <div className="min-h-screen">
+      <SecurityBanner />
       <Header
         currentRoute={route}
         setRoute={setRoute}
