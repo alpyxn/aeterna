@@ -19,7 +19,10 @@ BOLD='\033[1m'
 DIM='\033[2m'
 
 # Script version
-VERSION="1.1.0"
+VERSION="1.2.0"
+
+# Default values
+PROXY_MODE="traefik"  # traefik or nginx
 
 # ASCII Art
 print_banner() {
@@ -47,6 +50,8 @@ print_help() {
     echo ""
     echo "Options:"
     echo "  --help, -h       Show this help message"
+    echo "  --nginx          Use nginx reverse proxy mode (for existing nginx servers)"
+    echo "  --traefik        Use Traefik reverse proxy mode (default, standalone)"
     echo "  --uninstall      Remove Aeterna installation"
     echo "  --backup         Create backup of current installation"
     echo "  --update         Update existing installation"
@@ -54,7 +59,8 @@ print_help() {
     echo "  --version, -v    Show version"
     echo ""
     echo "Examples:"
-    echo "  $0               Run installation wizard"
+    echo "  $0               Run installation wizard (default: Traefik mode)"
+    echo "  $0 --nginx       Install with nginx reverse proxy support"
     echo "  $0 --backup      Create backup before updating"
     echo "  $0 --uninstall   Remove Aeterna completely"
     echo ""
@@ -85,6 +91,16 @@ check_port() {
         netstat -tuln | grep -q ":$port " && return 0
     elif command -v lsof &> /dev/null; then
         lsof -i:$port &>/dev/null && return 0
+    fi
+    return 1
+}
+
+# Detect if nginx is running
+detect_nginx() {
+    if check_port 80 || check_port 443; then
+        if pgrep -x "nginx" > /dev/null 2>&1; then
+            return 0
+        fi
     fi
     return 1
 }
@@ -146,24 +162,54 @@ check_requirements() {
         success "Git found"
     fi
     
-    # Check available ports
+    # Check available ports based on mode
     echo ""
     info "Checking port availability..."
     
-    if check_port 80; then
-        warning "Port 80 is already in use!"
-        echo -e "  ${DIM}Another service is using HTTP port. Stop it or use a different server.${NC}"
-        requirements_met=false
+    if [ "$PROXY_MODE" = "traefik" ]; then
+        if check_port 80; then
+            warning "Port 80 is already in use!"
+            if detect_nginx; then
+                echo -e "  ${CYAN}nginx detected!${NC} Consider using ${BOLD}--nginx${NC} mode instead."
+                echo ""
+                read -p "Switch to nginx mode? [Y/n]: " switch_mode
+                if [ -z "$switch_mode" ] || [ "$switch_mode" = "y" ] || [ "$switch_mode" = "Y" ]; then
+                    PROXY_MODE="nginx"
+                    success "Switched to nginx mode"
+                else
+                    requirements_met=false
+                fi
+            else
+                echo -e "  ${DIM}Another service is using HTTP port. Stop it or use --nginx mode.${NC}"
+                requirements_met=false
+            fi
+        else
+            success "Port 80 is available"
+        fi
+        
+        if [ "$PROXY_MODE" = "traefik" ]; then
+            if check_port 443; then
+                warning "Port 443 is already in use!"
+                requirements_met=false
+            else
+                success "Port 443 is available"
+            fi
+        fi
     else
-        success "Port 80 is available"
-    fi
-    
-    if check_port 443; then
-        warning "Port 443 is already in use!"
-        echo -e "  ${DIM}Another service is using HTTPS port. Stop it or use a different server.${NC}"
-        requirements_met=false
-    else
-        success "Port 443 is available"
+        # nginx mode - check internal ports
+        if check_port 8080; then
+            warning "Port 8080 is in use (needed for backend)"
+            requirements_met=false
+        else
+            success "Port 8080 is available (backend)"
+        fi
+        
+        if check_port 8081; then
+            warning "Port 8081 is in use (needed for frontend)"
+            requirements_met=false
+        else
+            success "Port 8081 is available (frontend)"
+        fi
     fi
     
     # Check available disk space (minimum 2GB)
@@ -272,29 +318,83 @@ check_firewall() {
     
     if check_command ufw; then
         if sudo ufw status | grep -q "Status: active"; then
-            local http_allowed=$(sudo ufw status | grep -E "80/tcp|80 " | grep -c "ALLOW")
-            local https_allowed=$(sudo ufw status | grep -E "443/tcp|443 " | grep -c "ALLOW")
-            
-            if [ "$http_allowed" -eq 0 ] || [ "$https_allowed" -eq 0 ]; then
-                warning "UFW firewall is active but ports 80/443 may not be open"
-                if prompt_yn "Open ports 80 and 443 in firewall?" "y"; then
-                    sudo ufw allow 80/tcp
-                    sudo ufw allow 443/tcp
-                    success "Firewall ports opened"
+            if [ "$PROXY_MODE" = "traefik" ]; then
+                local http_allowed=$(sudo ufw status | grep -E "80/tcp|80 " | grep -c "ALLOW")
+                local https_allowed=$(sudo ufw status | grep -E "443/tcp|443 " | grep -c "ALLOW")
+                
+                if [ "$http_allowed" -eq 0 ] || [ "$https_allowed" -eq 0 ]; then
+                    warning "UFW firewall is active but ports 80/443 may not be open"
+                    if prompt_yn "Open ports 80 and 443 in firewall?" "y"; then
+                        sudo ufw allow 80/tcp
+                        sudo ufw allow 443/tcp
+                        success "Firewall ports opened"
+                    fi
+                else
+                    success "Firewall configured correctly (ports 80, 443 open)"
                 fi
             else
-                success "Firewall configured correctly (ports 80, 443 open)"
+                success "nginx mode: No additional firewall configuration needed"
             fi
         else
             success "UFW firewall is inactive"
         fi
     elif check_command firewall-cmd; then
         if sudo firewall-cmd --state 2>/dev/null | grep -q "running"; then
-            warning "firewalld is active. Ensure ports 80 and 443 are open."
+            warning "firewalld is active. Ensure required ports are open."
         fi
     else
         success "No firewall detected"
     fi
+}
+
+# Select proxy mode
+select_proxy_mode() {
+    echo ""
+    echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}  Reverse Proxy Mode${NC}"
+    echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+    
+    # Auto-detect nginx
+    if detect_nginx; then
+        echo -e "  ${YELLOW}⚠ nginx detected on this server!${NC}"
+        echo ""
+    fi
+    
+    echo -e "  ${CYAN}1)${NC} ${BOLD}Traefik${NC} (Standalone)"
+    echo -e "     ${DIM}Best for: Dedicated servers, new installations${NC}"
+    echo -e "     ${DIM}• Automatic SSL certificates (Let's Encrypt)${NC}"
+    echo -e "     ${DIM}• Uses ports 80 and 443${NC}"
+    echo ""
+    echo -e "  ${CYAN}2)${NC} ${BOLD}nginx${NC} (Existing nginx server)"
+    echo -e "     ${DIM}Best for: Shared servers, existing websites${NC}"
+    echo -e "     ${DIM}• Works behind your existing nginx${NC}"
+    echo -e "     ${DIM}• Uses internal ports 8080/8081${NC}"
+    echo -e "     ${DIM}• You manage SSL via nginx${NC}"
+    echo ""
+    
+    local default_choice="1"
+    if detect_nginx; then
+        default_choice="2"
+    fi
+    
+    read -p "Select proxy mode [${default_choice}]: " mode_choice
+    mode_choice=${mode_choice:-$default_choice}
+    
+    case $mode_choice in
+        1)
+            PROXY_MODE="traefik"
+            success "Using Traefik (standalone) mode"
+            ;;
+        2)
+            PROXY_MODE="nginx"
+            success "Using nginx (behind existing nginx) mode"
+            ;;
+        *)
+            PROXY_MODE="traefik"
+            success "Using Traefik (standalone) mode"
+            ;;
+    esac
 }
 
 # Collect configuration
@@ -319,8 +419,12 @@ collect_config() {
     # Check DNS
     check_dns "$DOMAIN"
     
-    # Email for SSL
-    prompt ACME_EMAIL "Email for SSL certificates" "admin@$DOMAIN"
+    # Email for SSL (only for Traefik mode)
+    if [ "$PROXY_MODE" = "traefik" ]; then
+        prompt ACME_EMAIL "Email for SSL certificates" "admin@$DOMAIN"
+    else
+        ACME_EMAIL="admin@$DOMAIN"
+    fi
     
     # Database Configuration
     echo ""
@@ -384,8 +488,11 @@ confirm_installation() {
     echo -e "${BOLD}  Configuration Summary${NC}"
     echo -e "${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
+    echo -e "  ${CYAN}Proxy Mode:${NC}      ${BOLD}$PROXY_MODE${NC}"
     echo -e "  ${CYAN}Domain:${NC}          $DOMAIN"
-    echo -e "  ${CYAN}SSL Email:${NC}       $ACME_EMAIL"
+    if [ "$PROXY_MODE" = "traefik" ]; then
+        echo -e "  ${CYAN}SSL Email:${NC}       $ACME_EMAIL"
+    fi
     echo -e "  ${CYAN}Owner Email:${NC}     $OWNER_EMAIL"
     echo ""
     echo -e "  ${CYAN}Database User:${NC}   $DB_USER"
@@ -442,6 +549,7 @@ create_env_file() {
     cat > .env << EOF
 # Aeterna Production Configuration
 # Generated by install.sh v${VERSION} on $(date)
+# Proxy Mode: $PROXY_MODE
 
 # Domain Configuration
 DOMAIN=$DOMAIN
@@ -459,6 +567,9 @@ VITE_API_URL=/api
 
 # Owner Configuration
 OWNER_EMAIL=$OWNER_EMAIL
+
+# Proxy Mode
+PROXY_MODE=$PROXY_MODE
 EOF
 
     # Add SMTP configuration if provided
@@ -479,16 +590,93 @@ EOF
     success "Environment file created"
 }
 
+# Generate nginx configuration
+generate_nginx_config() {
+    local nginx_config="$INSTALL_DIR/nginx-aeterna.conf"
+    
+    cat > "$nginx_config" << EOF
+# Aeterna nginx configuration
+# Copy this to /etc/nginx/sites-available/aeterna
+# Then: sudo ln -s /etc/nginx/sites-available/aeterna /etc/nginx/sites-enabled/
+# And: sudo nginx -t && sudo systemctl reload nginx
+
+server {
+    listen 80;
+    server_name $DOMAIN;
+    
+    # Redirect HTTP to HTTPS
+    return 301 https://\$server_name\$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name $DOMAIN;
+    
+    # SSL Configuration - Update paths to your certificates
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN/privkey.pem;
+    
+    # SSL Security Settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    
+    # API Backend
+    location /api {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
+    
+    # Frontend
+    location / {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+    }
+}
+EOF
+
+    success "nginx configuration generated: $nginx_config"
+}
+
 # Start the application
 start_application() {
     echo ""
     step "Building and starting Aeterna..."
     
-    docker compose -f docker-compose.prod.yml pull 2>/dev/null || true
-    docker compose -f docker-compose.prod.yml build --no-cache
-    docker compose -f docker-compose.prod.yml up -d
+    local compose_file="docker-compose.prod.yml"
+    if [ "$PROXY_MODE" = "nginx" ]; then
+        compose_file="docker-compose.nginx.yml"
+    fi
+    
+    docker compose -f "$compose_file" pull 2>/dev/null || true
+    docker compose -f "$compose_file" build --no-cache
+    docker compose -f "$compose_file" up -d
     
     success "Aeterna containers started!"
+    
+    # Generate nginx config if in nginx mode
+    if [ "$PROXY_MODE" = "nginx" ]; then
+        generate_nginx_config
+    fi
 }
 
 # Wait for services to be ready
@@ -497,10 +685,15 @@ wait_for_services() {
     
     local max_attempts=60
     local attempt=0
+    local check_port=80
+    
+    if [ "$PROXY_MODE" = "nginx" ]; then
+        check_port=8081
+    fi
     
     echo -n "  "
     while [ $attempt -lt $max_attempts ]; do
-        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:80" 2>/dev/null | grep -qE "301|200|302"; then
+        if curl -s -o /dev/null -w "%{http_code}" "http://localhost:$check_port" 2>/dev/null | grep -qE "301|200|302"; then
             echo ""
             success "All services are ready!"
             return 0
@@ -512,7 +705,12 @@ wait_for_services() {
     
     echo ""
     warning "Services are taking longer than expected to start."
-    info "Check logs with: docker compose -f docker-compose.prod.yml logs"
+    
+    local compose_file="docker-compose.prod.yml"
+    if [ "$PROXY_MODE" = "nginx" ]; then
+        compose_file="docker-compose.nginx.yml"
+    fi
+    info "Check logs with: docker compose -f $compose_file logs"
 }
 
 # Create backup
@@ -528,10 +726,16 @@ create_backup() {
     # Backup files
     sudo cp -r "${INSTALL_DIR:-/opt/aeterna}" "$backup_dir"
     
-    # Backup database
+    # Determine compose file
     cd "${INSTALL_DIR:-/opt/aeterna}"
-    if docker compose -f docker-compose.prod.yml ps db 2>/dev/null | grep -q "Up"; then
-        docker compose -f docker-compose.prod.yml exec -T db pg_dump -U aeterna aeterna > "$backup_dir/database_backup.sql" 2>/dev/null || warning "Could not backup database"
+    local compose_file="docker-compose.prod.yml"
+    if [ -f ".env" ] && grep -q "PROXY_MODE=nginx" .env 2>/dev/null; then
+        compose_file="docker-compose.nginx.yml"
+    fi
+    
+    # Backup database
+    if docker compose -f "$compose_file" ps db 2>/dev/null | grep -q "Up"; then
+        docker compose -f "$compose_file" exec -T db pg_dump -U aeterna aeterna > "$backup_dir/database_backup.sql" 2>/dev/null || warning "Could not backup database"
     fi
     
     success "Backup created at $backup_dir"
@@ -561,7 +765,10 @@ uninstall() {
     
     info "Stopping containers..."
     cd "$install_path"
+    
+    # Try both compose files
     docker compose -f docker-compose.prod.yml down -v 2>/dev/null || true
+    docker compose -f docker-compose.nginx.yml down -v 2>/dev/null || true
     
     info "Removing installation directory..."
     sudo rm -rf "$install_path"
@@ -582,14 +789,25 @@ check_status() {
     echo ""
     
     cd "$install_path"
-    docker compose -f docker-compose.prod.yml ps
+    
+    # Determine compose file
+    local compose_file="docker-compose.prod.yml"
+    if [ -f ".env" ] && grep -q "PROXY_MODE=nginx" .env 2>/dev/null; then
+        compose_file="docker-compose.nginx.yml"
+        echo -e "  ${CYAN}Mode:${NC} nginx"
+    else
+        echo -e "  ${CYAN}Mode:${NC} traefik"
+    fi
+    echo ""
+    
+    docker compose -f "$compose_file" ps
     
     echo ""
     
     # Check if services are healthy
-    local frontend_status=$(docker compose -f docker-compose.prod.yml ps frontend 2>/dev/null | grep -c "Up")
-    local backend_status=$(docker compose -f docker-compose.prod.yml ps backend 2>/dev/null | grep -c "Up")
-    local db_status=$(docker compose -f docker-compose.prod.yml ps db 2>/dev/null | grep -c "Up")
+    local frontend_status=$(docker compose -f "$compose_file" ps frontend 2>/dev/null | grep -c "Up")
+    local backend_status=$(docker compose -f "$compose_file" ps backend 2>/dev/null | grep -c "Up")
+    local db_status=$(docker compose -f "$compose_file" ps db 2>/dev/null | grep -c "Up")
     
     if [ "$frontend_status" -eq 1 ] && [ "$backend_status" -eq 1 ] && [ "$db_status" -eq 1 ]; then
         success "All services are running"
@@ -617,8 +835,14 @@ update_installation() {
     git fetch origin
     git pull origin main
     
-    docker compose -f docker-compose.prod.yml build --no-cache
-    docker compose -f docker-compose.prod.yml up -d
+    # Determine compose file
+    local compose_file="docker-compose.prod.yml"
+    if [ -f ".env" ] && grep -q "PROXY_MODE=nginx" .env 2>/dev/null; then
+        compose_file="docker-compose.nginx.yml"
+    fi
+    
+    docker compose -f "$compose_file" build --no-cache
+    docker compose -f "$compose_file" up -d
     
     success "Aeterna has been updated!"
 }
@@ -634,23 +858,46 @@ print_completion() {
     echo ""
     echo -e "  ${BOLD}Your Aeterna instance is now running!${NC}"
     echo ""
+    echo -e "  ${CYAN}Mode:${NC}           ${BOLD}$PROXY_MODE${NC}"
     echo -e "  ${CYAN}Access URL:${NC}     https://$DOMAIN"
     echo -e "  ${CYAN}Server IP:${NC}      $server_ip"
     echo -e "  ${CYAN}Install Dir:${NC}    $INSTALL_DIR"
     echo ""
-    echo -e "  ${BOLD}📋 Next Steps:${NC}"
-    echo "  1. Ensure DNS A record points $DOMAIN → $server_ip"
-    echo "  2. Open https://$DOMAIN in your browser"
-    echo "  3. Set up your master password"
-    if [ "$CONFIGURE_SMTP" != true ]; then
-        echo "  4. Configure SMTP in Settings for email delivery"
+    
+    if [ "$PROXY_MODE" = "nginx" ]; then
+        echo -e "  ${BOLD}📋 IMPORTANT: nginx Configuration Required${NC}"
+        echo ""
+        echo -e "  ${YELLOW}1. Get SSL certificate:${NC}"
+        echo "     sudo certbot certonly --nginx -d $DOMAIN"
+        echo ""
+        echo -e "  ${YELLOW}2. Copy nginx config:${NC}"
+        echo "     sudo cp $INSTALL_DIR/nginx-aeterna.conf /etc/nginx/sites-available/aeterna"
+        echo "     sudo ln -s /etc/nginx/sites-available/aeterna /etc/nginx/sites-enabled/"
+        echo ""
+        echo -e "  ${YELLOW}3. Test and reload nginx:${NC}"
+        echo "     sudo nginx -t && sudo systemctl reload nginx"
+        echo ""
+    else
+        echo -e "  ${BOLD}📋 Next Steps:${NC}"
+        echo "  1. Ensure DNS A record points $DOMAIN → $server_ip"
+        echo "  2. Open https://$DOMAIN in your browser"
+        echo "  3. Set up your master password"
+        if [ "$CONFIGURE_SMTP" != true ]; then
+            echo "  4. Configure SMTP in Settings for email delivery"
+        fi
+        echo ""
     fi
-    echo ""
+    
+    local compose_file="docker-compose.prod.yml"
+    if [ "$PROXY_MODE" = "nginx" ]; then
+        compose_file="docker-compose.nginx.yml"
+    fi
+    
     echo -e "  ${BOLD}🔧 Useful Commands:${NC}"
     echo "  cd $INSTALL_DIR"
-    echo "  docker compose -f docker-compose.prod.yml logs -f    # View logs"
-    echo "  docker compose -f docker-compose.prod.yml restart    # Restart"
-    echo "  docker compose -f docker-compose.prod.yml down       # Stop"
+    echo "  docker compose -f $compose_file logs -f    # View logs"
+    echo "  docker compose -f $compose_file restart    # Restart"
+    echo "  docker compose -f $compose_file down       # Stop"
     echo ""
     echo -e "  ${BOLD}📦 Maintenance:${NC}"
     echo "  ./install.sh --backup      # Create backup"
@@ -664,37 +911,50 @@ print_completion() {
 # Main installation flow
 main() {
     # Parse command line arguments
-    case "${1:-}" in
-        --help|-h)
-            print_banner
-            print_help
-            exit 0
-            ;;
-        --version|-v)
-            echo "Aeterna Installation Wizard v$VERSION"
-            exit 0
-            ;;
-        --uninstall)
-            print_banner
-            uninstall
-            exit 0
-            ;;
-        --backup)
-            print_banner
-            create_backup
-            exit 0
-            ;;
-        --update)
-            print_banner
-            update_installation
-            exit 0
-            ;;
-        --status)
-            print_banner
-            check_status
-            exit 0
-            ;;
-    esac
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --help|-h)
+                print_banner
+                print_help
+                exit 0
+                ;;
+            --version|-v)
+                echo "Aeterna Installation Wizard v$VERSION"
+                exit 0
+                ;;
+            --nginx)
+                PROXY_MODE="nginx"
+                shift
+                ;;
+            --traefik)
+                PROXY_MODE="traefik"
+                shift
+                ;;
+            --uninstall)
+                print_banner
+                uninstall
+                exit 0
+                ;;
+            --backup)
+                print_banner
+                create_backup
+                exit 0
+                ;;
+            --update)
+                print_banner
+                update_installation
+                exit 0
+                ;;
+            --status)
+                print_banner
+                check_status
+                exit 0
+                ;;
+            *)
+                error "Unknown option: $1. Use --help for usage."
+                ;;
+        esac
+    done
     
     clear
     print_banner
@@ -703,6 +963,11 @@ main() {
     if [ "$EUID" -eq 0 ]; then
         warning "Running as root. It's recommended to run as a normal user with sudo privileges."
         echo ""
+    fi
+    
+    # Select proxy mode if not specified via command line
+    if [ -z "${PROXY_MODE_SET:-}" ]; then
+        select_proxy_mode
     fi
     
     check_requirements

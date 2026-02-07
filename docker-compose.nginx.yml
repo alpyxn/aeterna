@@ -1,0 +1,62 @@
+# Aeterna - Docker Compose for nginx reverse proxy mode
+# Use this when you have an existing nginx installation
+# Exposes backend on port 8080 and frontend on port 8081
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=host=db user=${DB_USER} password=${DB_PASS} dbname=${DB_NAME} port=5432 sslmode=disable
+      - ENV=production
+      - ALLOWED_ORIGINS=https://${DOMAIN}
+      - OWNER_EMAIL=${OWNER_EMAIL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Aeterna}
+    ports:
+      - "127.0.0.1:8080:3000"
+    depends_on:
+      - db
+    restart: always
+    networks:
+      - aeterna-net
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - aeterna-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=/api
+    ports:
+      - "127.0.0.1:8081:80"
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - aeterna-net
+
+volumes:
+  postgres_data:
+
+networks:
+  aeterna-net:
+    driver: bridge
