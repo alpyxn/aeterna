@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
-import { Mail, Clock, Loader2, Trash2, Heart, AlertCircle, RefreshCw, Inbox, Eye } from 'lucide-react';
+import { Mail, Clock, Loader2, Trash2, Heart, AlertCircle, RefreshCw, Inbox, Eye, Pencil } from 'lucide-react';
 import { apiRequest } from "@/lib/api";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Select } from "@/components/ui/select"
 
 export default function Dashboard() {
     const [messages, setMessages] = useState([]);
@@ -67,6 +69,55 @@ export default function Dashboard() {
             await apiRequest(`/messages/${message.id}`, {
                 method: 'DELETE'
             });
+            await fetchMessages();
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    // Edit state
+    const [editingMessage, setEditingMessage] = useState(null);
+    const [editContent, setEditContent] = useState('');
+    const [editDuration, setEditDuration] = useState(1440);
+    const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+    const timePresets = [
+        { label: '1 Minute (Debug)', value: 1 },
+        { label: '15 Minutes (Test)', value: 15 },
+        { label: '1 Hour', value: 60 },
+        { label: '1 Day', value: 1440 },
+        { label: '3 Days', value: 4320 },
+        { label: '1 Week', value: 10080 },
+        { label: '2 Weeks', value: 20160 },
+        { label: '1 Month', value: 43200 },
+        { label: '3 Months', value: 129600 },
+        { label: '6 Months', value: 259200 },
+        { label: '1 Year', value: 525600 },
+    ];
+
+    const openEditDialog = (message) => {
+        setEditingMessage(message);
+        setEditContent(message.content);
+        setEditDuration(message.trigger_duration);
+        setEditDialogOpen(true);
+    };
+
+    const handleUpdate = async () => {
+        if (!editingMessage) return;
+
+        setActionLoading(editingMessage.id);
+        try {
+            await apiRequest(`/messages/${editingMessage.id}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    content: editContent,
+                    trigger_duration: editDuration
+                })
+            });
+            setEditDialogOpen(false);
+            setEditingMessage(null);
             await fetchMessages();
         } catch (e) {
             setError(e.message);
@@ -252,6 +303,17 @@ export default function Dashboard() {
                                             <><Heart className="w-3 h-3 mr-1" /> I'm Alive</>
                                         )}
                                     </Button>
+                                    {!isTriggered && (
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-9 w-9 border-dark-700 hover:bg-teal-500/10 hover:border-teal-500/30 hover:text-teal-400"
+                                            onClick={() => openEditDialog(message)}
+                                            disabled={actionLoading === message.id}
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </Button>
+                                    )}
                                     <AlertDialog>
                                         <AlertDialogTrigger asChild>
                                             <Button
@@ -282,6 +344,67 @@ export default function Dashboard() {
                     })}
                 </div>
             )}
+
+            {/* Edit Dialog */}
+            <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                <DialogContent className="max-w-2xl bg-dark-900 border-dark-700">
+                    <DialogHeader>
+                        <DialogTitle>Edit Switch</DialogTitle>
+                        <DialogDescription className="text-dark-400">
+                            {editingMessage?.recipient_email}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-dark-400">Message Content</label>
+                            <Textarea
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                className="min-h-[150px] bg-dark-950 border-dark-700 focus:border-teal-500 resize-none text-dark-100 placeholder:text-dark-500"
+                                placeholder="Enter your message..."
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-dark-400 flex items-center gap-2">
+                                <Clock className="w-3 h-3" /> Trigger After
+                            </label>
+                            <Select
+                                value={editDuration}
+                                onChange={(e) => setEditDuration(Number(e.target.value))}
+                                className="bg-dark-950 border-dark-700 text-dark-100"
+                            >
+                                {timePresets.map(preset => (
+                                    <option key={preset.value} value={preset.value}>
+                                        {preset.label}
+                                    </option>
+                                ))}
+                            </Select>
+                            <p className="text-[10px] text-dark-500">
+                                Timer will reset when you save changes
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-2 mt-6">
+                        <Button
+                            variant="outline"
+                            onClick={() => setEditDialogOpen(false)}
+                            className="border-dark-700 text-dark-200 hover:bg-dark-800"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleUpdate}
+                            disabled={actionLoading || !editContent.trim()}
+                            className="bg-teal-600 hover:bg-teal-500 text-white"
+                        >
+                            {actionLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : null}
+                            Save Changes
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

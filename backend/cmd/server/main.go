@@ -123,6 +123,7 @@ func main() {
 	mgmt.Post("/messages", handlers.CreateMessage)
 	mgmt.Get("/messages", handlers.ListMessages)
 	mgmt.Delete("/messages/:id", handlers.DeleteMessage)
+	mgmt.Put("/messages/:id", handlers.UpdateMessage)
 	mgmt.Post("/heartbeat", handlers.Heartbeat)
 	mgmt.Get("/webhooks", handlers.ListWebhooks)
 	mgmt.Post("/webhooks", handlers.CreateWebhook)

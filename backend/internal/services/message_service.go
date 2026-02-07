@@ -122,3 +122,48 @@ func (s MessageService) Delete(id string) error {
 
 	return nil
 }
+
+func (s MessageService) Update(id, content string, triggerDuration int) (models.Message, error) {
+	var msg models.Message
+	if err := database.DB.First(&msg, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.Message{}, NotFound("Message not found", err)
+		}
+		return models.Message{}, Internal("Failed to fetch message", err)
+	}
+
+	// Cannot edit triggered messages
+	if msg.Status == models.StatusTriggered {
+		return models.Message{}, BadRequest("Cannot edit a triggered message. The message has already been delivered.", nil)
+	}
+
+	// Validate content
+	if err := msgValidationService.ValidateContent(content); err != nil {
+		return models.Message{}, err
+	}
+
+	// Validate trigger duration
+	if err := msgValidationService.ValidateTriggerDuration(triggerDuration); err != nil {
+		return models.Message{}, err
+	}
+
+	// Encrypt the new content
+	encrypted, err := cryptoService.Encrypt(content)
+	if err != nil {
+		return models.Message{}, err
+	}
+
+	// Update fields
+	msg.Content = encrypted
+	msg.TriggerDuration = triggerDuration
+	msg.LastSeen = time.Now()
+	msg.ReminderSent = false
+
+	if err := database.DB.Save(&msg).Error; err != nil {
+		return models.Message{}, Internal("Failed to update message", err)
+	}
+
+	// Return decrypted content for API consumers
+	msg.Content = content
+	return msg, nil
+}

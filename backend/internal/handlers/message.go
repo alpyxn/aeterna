@@ -77,3 +77,26 @@ func DeleteMessage(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"success": true, "message": "Message deleted successfully"})
 }
+
+type UpdateMessageRequest struct {
+	Content         string `json:"content"`
+	TriggerDuration int    `json:"trigger_duration"`
+}
+
+func UpdateMessage(c *fiber.Ctx) error {
+	id := c.Params("id")
+	req := new(UpdateMessageRequest)
+	if err := c.BodyParser(req); err != nil {
+		return writeError(c, services.BadRequest("Invalid request body", err))
+	}
+
+	msg, err := messageService.Update(id, req.Content, req.TriggerDuration)
+	if err != nil {
+		return writeError(c, err)
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": msg,
+	})
+}

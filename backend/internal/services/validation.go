@@ -112,8 +112,8 @@ func (s ValidationService) ValidateTriggerDuration(duration int) error {
 	if duration < 1 {
 		return BadRequest("Duration must be at least 1 minute", nil)
 	}
-	if duration > 43200 {
-		return BadRequest("Duration cannot exceed 30 days (43200 minutes)", nil)
+	if duration > 525600 {
+		return BadRequest("Duration cannot exceed 1 year (525600 minutes)", nil)
 	}
 	return nil
 }
