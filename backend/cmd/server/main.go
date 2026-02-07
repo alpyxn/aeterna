@@ -27,8 +27,9 @@ func main() {
 		if os.Getenv("ALLOWED_ORIGINS") == "" {
 			log.Fatal("ALLOWED_ORIGINS must be set in production")
 		}
-		if os.Getenv("ALLOWED_ORIGINS") == "*" {
-			log.Fatal("ALLOWED_ORIGINS cannot be '*' in production")
+		// Allow * only in simple mode (HTTP-only, IP-based access)
+		if os.Getenv("ALLOWED_ORIGINS") == "*" && os.Getenv("PROXY_MODE") != "simple" {
+			log.Fatal("ALLOWED_ORIGINS cannot be '*' in production (unless using simple mode)")
 		}
 	}
 	// Initialize Database
