@@ -248,7 +248,7 @@ export default function Settings() {
                 {showGuide && (
                     <div className="px-4 pb-4 space-y-2">
                         {SMTP_GUIDES.map(guide => (
-                            <div key={guide.name} className="flex items-center justify-between p-3 bg-dark-950 rounded-lg border border-dark-800">
+                            <div key={guide.name} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-dark-950 rounded-lg border border-dark-800">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
                                         <span className="font-medium text-sm text-dark-100">{guide.name}</span>
@@ -440,7 +440,7 @@ export default function Settings() {
                         <div className="space-y-3">
                             {webhooks.map((item, index) => (
                                 <div key={item.id ?? `new-${index}`} className="rounded-lg border border-dark-800 bg-dark-950/60 p-3 space-y-3">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                                         <div className="flex items-center gap-3">
                                             <label className="flex items-center gap-2 text-xs text-dark-400">
                                                 <input
@@ -457,7 +457,7 @@ export default function Settings() {
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex flex-wrap items-center gap-2">
                                             <Button
                                                 variant="outline"
                                                 size="sm"
@@ -567,7 +567,7 @@ export default function Settings() {
                         </Alert>
                     )}
                 </CardContent>
-                <CardFooter className="flex gap-2">
+                <CardFooter className="flex flex-col sm:flex-row gap-2">
                     <Button
                         variant="outline"
                         className="border-dark-700 hover:bg-dark-800"

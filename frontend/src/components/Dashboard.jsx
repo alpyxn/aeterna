@@ -257,7 +257,7 @@ export default function Dashboard() {
                                                             <Eye className="w-3 h-3" /> View Full Message
                                                         </button>
                                                     </DialogTrigger>
-                                                    <DialogContent className="max-w-2xl">
+                                                    <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                                                         <DialogHeader>
                                                             <DialogTitle>Message Content</DialogTitle>
                                                             <DialogDescription>
@@ -347,7 +347,7 @@ export default function Dashboard() {
 
             {/* Edit Dialog */}
             <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-                <DialogContent className="max-w-2xl bg-dark-900 border-dark-700">
+                <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-dark-900 border-dark-700">
                     <DialogHeader>
                         <DialogTitle>Edit Switch</DialogTitle>
                         <DialogDescription className="text-dark-400">
@@ -384,7 +384,7 @@ export default function Dashboard() {
                             </p>
                         </div>
                     </div>
-                    <div className="flex justify-end gap-2 mt-6">
+                    <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
                         <Button
                             variant="outline"
                             onClick={() => setEditDialogOpen(false)}
