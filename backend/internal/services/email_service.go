@@ -2,6 +2,7 @@ package services
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/smtp"
 	"strings"
@@ -27,7 +28,7 @@ func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.
 
 	content := msg.Content
 	if msg.Content != "" {
-		decrypted, err := emailCryptoService.Decrypt(msg.Content)
+		decrypted, err := emailCryptoService.DecryptIfNeeded(msg.Content)
 		if err != nil {
 			return err
 		}
@@ -105,6 +106,20 @@ func (s EmailService) sendWithRetry(sendFn func() error) error {
 	return lastErr
 }
 
+// authWithFallback tries PLAIN auth first, then LOGIN auth as fallback
+func authWithFallback(client *smtp.Client, username, password, host string) error {
+	// Try PLAIN auth first
+	auth := smtp.PlainAuth("", username, password, host)
+	if err := client.Auth(auth); err != nil {
+		// Try LOGIN auth as fallback (for Yandex and others)
+		loginAuth := &emailLoginAuth{username, password}
+		if loginErr := client.Auth(loginAuth); loginErr != nil {
+			return fmt.Errorf("auth failed (PLAIN: %v, LOGIN: %v)", err, loginErr)
+		}
+	}
+	return nil
+}
+
 func (s EmailService) sendEmailSSL(settings models.Settings, addr, from, to string, message []byte) error {
 	tlsConfig := &tls.Config{ServerName: settings.SMTPHost}
 
@@ -120,9 +135,8 @@ func (s EmailService) sendEmailSSL(settings models.Settings, addr, from, to stri
 	}
 	defer client.Quit()
 
-	auth := smtp.PlainAuth("", settings.SMTPUser, settings.SMTPPass, settings.SMTPHost)
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("auth failed: %v", err)
+	if err = authWithFallback(client, settings.SMTPUser, settings.SMTPPass, settings.SMTPHost); err != nil {
+		return err
 	}
 
 	if err = client.Mail(from); err != nil {
@@ -160,9 +174,8 @@ func (s EmailService) sendEmailSTARTTLS(settings models.Settings, addr, from, to
 		}
 	}
 
-	auth := smtp.PlainAuth("", settings.SMTPUser, settings.SMTPPass, settings.SMTPHost)
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("auth failed: %v", err)
+	if err = authWithFallback(client, settings.SMTPUser, settings.SMTPPass, settings.SMTPHost); err != nil {
+		return err
 	}
 
 	if err = client.Mail(from); err != nil {
@@ -185,3 +198,27 @@ func (s EmailService) sendEmailSTARTTLS(settings models.Settings, addr, from, to
 
 	return w.Close()
 }
+
+// emailLoginAuth implements LOGIN authentication mechanism
+type emailLoginAuth struct {
+	username, password string
+}
+
+func (a *emailLoginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", []byte{}, nil
+}
+
+func (a *emailLoginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		switch string(fromServer) {
+		case "Username:":
+			return []byte(a.username), nil
+		case "Password:":
+			return []byte(a.password), nil
+		default:
+			return nil, errors.New("unknown LOGIN challenge")
+		}
+	}
+	return nil, nil
+}
+
