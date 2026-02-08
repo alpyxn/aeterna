@@ -1,144 +1,78 @@
-# Aeterna - Dead Man's Switch
+# Aeterna
 
-A secure, self-hosted "dead man's switch" that sends pre-written messages to designated recipients if you stop checking in.
+*"What words would you leave behind?"*
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Docker](https://img.shields.io/badge/docker-ready-brightgreen.svg)
+---
 
-## 🚀 Quick Install (VPS/VDS)
+Aeterna is a dead man's switch. You write messages. You check in regularly. If you stop checking in, your messages are delivered.
 
-One command to deploy on any Linux VPS:
+It's that simple. And that important.
+
+## The Concept
+
+Some things need to be said, but only at the right time. A password that should reach your partner. A letter that waits for the right moment. Instructions that matter only when you're not there to give them.
+
+Aeterna holds these words. It watches. It waits. And when the time comes, it delivers.
+
+## Quick Start
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alpyxn/aeterna/main/install.sh | bash
 ```
 
-The wizard will:
-- ✅ Install Docker & Docker Compose if needed
-- ✅ Configure your domain & SSL certificates automatically
-- ✅ Set up PostgreSQL database
-- ✅ Deploy the application
+Requires: Linux server, domain name, ports 80/443 open.
 
-**Requirements:**
-- Linux VPS (Ubuntu/Debian recommended)
-- Domain pointed to your server's IP
-- Ports 80 and 443 open
+## Manual Setup
 
-## 📦 Manual Installation
-
-### 1. Clone the repository
 ```bash
 git clone https://github.com/alpyxn/aeterna.git
 cd aeterna
-```
-
-### 2. Configure environment
-```bash
 cp .env.production.example .env
-# Edit .env with your settings
-nano .env
-```
-
-### 3. Deploy
-```bash
+# Configure your settings
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-## 💻 Development Setup
+## How It Works
+
+1. Write a message, set a recipient
+2. Choose your check-in interval (1 hour to 1 year)
+3. Check in before the timer expires
+4. Miss a check-in, and your message is delivered
+
+## Configuration
+
+| Variable | Purpose |
+|----------|---------|
+| `DOMAIN` | Your domain name |
+| `ACME_EMAIL` | For SSL certificates |
+| `DB_USER`, `DB_PASS`, `DB_NAME` | Database credentials |
+| `ENCRYPTION_KEY` | Message encryption key |
+
+SMTP settings are configured through the web interface after installation.
+
+## Security
+
+All messages are encrypted at rest using AES-256. Authentication is rate-limited. HTTPS is automatic via Let's Encrypt. Your words stay private until they're meant to be read.
+
+## Architecture
+
+```
+backend/     Go API server
+frontend/    React application  
+```
+
+Both containerized. PostgreSQL for storage. Traefik for routing.
+
+## Updates
 
 ```bash
-# Clone repository
-git clone https://github.com/alpyxn/aeterna.git
-cd aeterna
-
-# Copy environment file
-cp .env.example .env
-
-# Start with Docker Compose
-docker compose up --build
-
-# Access at http://localhost:5173
+git pull && docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-## 🔧 Configuration
+## License
 
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DOMAIN` | Your domain name | ✅ Production |
-| `ACME_EMAIL` | Email for SSL certificates | ✅ Production |
-| `DB_USER` | PostgreSQL username | ✅ |
-| `DB_PASS` | PostgreSQL password | ✅ |
-| `DB_NAME` | PostgreSQL database name | ✅ |
-| `SMTP_HOST` | SMTP server host | ⚡ For email |
-| `SMTP_PORT` | SMTP server port | ⚡ For email |
-| `SMTP_USER` | SMTP username | ⚡ For email |
-| `SMTP_PASS` | SMTP password | ⚡ For email |
-
-### SMTP Configuration
-
-Configure email in **Settings** after installation, or set environment variables:
-
-**Gmail:**
-```
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your@gmail.com
-SMTP_PASS=your_app_password
-```
-
-**Yandex:**
-```
-SMTP_HOST=smtp.yandex.com
-SMTP_PORT=465
-SMTP_USER=your@yandex.com
-SMTP_PASS=your_password
-```
-
-## 📚 How It Works
-
-1. **Create a Switch** - Write a message and set a recipient
-2. **Set Timer** - Choose how long before the switch triggers (1 hour to 1 year)
-3. **Stay Alive** - Click "I'm Alive" before the timer runs out
-4. **Auto-Delivery** - If you miss the deadline, your message is sent
-
-## 🛡️ Security
-
-- Master password protection for all management
-- Encrypted message storage
-- Rate-limited authentication
-- HTTPS/TLS with Let's Encrypt
-- No external tracking
-
-## 📁 Project Structure
-
-```
-aeterna/
-├── backend/           # Go API server
-│   ├── cmd/server/    # Main entry point
-│   ├── internal/      # Core logic
-│   └── Dockerfile
-├── frontend/          # React + Vite frontend
-│   ├── src/
-│   └── Dockerfile
-├── docker-compose.yml          # Development
-├── docker-compose.prod.yml     # Production with Traefik
-└── install.sh                  # Auto-installer
-```
-
-## 🔄 Updates
-
-```bash
-cd /opt/aeterna  # or your install directory
-git pull
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-## 📝 License
-
-MIT License - see [LICENSE](LICENSE) for details.
+MIT
 
 ---
 
-Made with ❤️ for peace of mind.
+*Named for the Latin word meaning "eternal" — because some messages are meant to outlast us.*
