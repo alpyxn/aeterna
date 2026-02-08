@@ -33,8 +33,10 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 	origin := strings.TrimSpace(c.Get("Origin"))
 	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
 	
-	// Debug logging
-	slog.Info("Origin check", "origin", origin, "allowed", allowedOrigins, "referer", c.Get("Referer"))
+	// Debug logging (only in non-production)
+	if os.Getenv("ENV") != "production" {
+		slog.Info("Origin check", "origin", origin, "allowed", allowedOrigins, "referer", c.Get("Referer"))
+	}
 	
 	// Support wildcard for simple/testing mode - check first!
 	if allowedOrigins == "*" {

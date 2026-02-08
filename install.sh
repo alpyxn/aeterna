@@ -504,15 +504,6 @@ collect_config() {
         warning "SMTP not configured. You can set it up later in the application settings."
     fi
     
-    # Owner Email for Reminders
-    echo ""
-    echo -e "${CYAN}👤 Owner Configuration${NC}"
-    echo -e "${DIM}Your email for receiving reminder notifications${NC}"
-    echo ""
-    
-    local default_owner_email="${ACME_EMAIL:-admin@example.com}"
-    prompt OWNER_EMAIL "Owner Email (for reminders)" "$default_owner_email"
-    
     # Installation Directory
     echo ""
     echo -e "${CYAN}📁 Installation Directory${NC}"
@@ -550,7 +541,6 @@ confirm_installation() {
             ;;
     esac
     
-    echo -e "  ${CYAN}Owner Email:${NC}     $OWNER_EMAIL"
     echo ""
     echo -e "  ${CYAN}Database User:${NC}   $DB_USER"
     echo -e "  ${CYAN}Database Name:${NC}   $DB_NAME"
@@ -632,8 +622,8 @@ ENV=production
 ALLOWED_ORIGINS=$ALLOWED_ORIGINS
 VITE_API_URL=/api
 
-# Owner Configuration
-OWNER_EMAIL=$OWNER_EMAIL
+# Security - Auto-generated encryption key (DO NOT CHANGE after first run!)
+ENCRYPTION_KEY=$(openssl rand -base64 32)
 
 # Installation Mode
 PROXY_MODE=$PROXY_MODE

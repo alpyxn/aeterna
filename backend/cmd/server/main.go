@@ -71,7 +71,9 @@ func main() {
 	database.DB.Exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;")
 	database.DB.Exec("UPDATE messages SET reminder_sent = FALSE WHERE reminder_sent IS NULL;")
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: 1 * 1024 * 1024, // 1MB limit to prevent DoS
+	})
 
 	// Middleware
 	app.Use(requestid.New())
@@ -115,6 +117,10 @@ func main() {
 			})
 		},
 	}))
+
+	// Note: CSRF Protection is provided by SameSite=Lax cookies
+	// Additional CSRF token middleware removed as frontend doesn't support it
+	// and SameSite provides sufficient protection for same-site origins
 
 	// Routes
 	api := app.Group("/api")

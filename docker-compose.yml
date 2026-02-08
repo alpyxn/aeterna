@@ -9,6 +9,7 @@ services:
       - .env
     environment:
       - DATABASE_URL=host=db user=postgres password=postgres dbname=aeterna port=5432 sslmode=disable
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
 
     depends_on:
       - db

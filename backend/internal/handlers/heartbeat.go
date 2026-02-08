@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"time"
 
 	"github.com/alpyxn/aeterna/backend/internal/database"
@@ -24,7 +25,7 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 		return writeError(c, err)
 	}
 
-	if settings.HeartbeatToken == "" || settings.HeartbeatToken != token {
+	if settings.HeartbeatToken == "" || subtle.ConstantTimeCompare([]byte(settings.HeartbeatToken), []byte(token)) != 1 {
 		return c.Status(403).JSON(fiber.Map{"error": "Invalid token"})
 	}
 

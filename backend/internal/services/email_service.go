@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/smtp"
+	"strings"
 	"time"
 
 	"github.com/alpyxn/aeterna/backend/internal/models"
@@ -12,6 +13,13 @@ import (
 type EmailService struct{}
 
 var emailCryptoService = CryptoService{}
+
+// sanitizeEmailHeader removes newlines to prevent header injection
+func sanitizeEmailHeader(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	return s
+}
 
 func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.Message) error {
 	to := msg.RecipientEmail
@@ -48,6 +56,12 @@ func (s EmailService) SendPlain(settings models.Settings, to, subject, body stri
 	if fromName == "" {
 		fromName = "Aeterna"
 	}
+
+	// Sanitize headers to prevent header injection
+	from = sanitizeEmailHeader(from)
+	fromName = sanitizeEmailHeader(fromName)
+	to = sanitizeEmailHeader(to)
+	subject = sanitizeEmailHeader(subject)
 
 	headers := fmt.Sprintf("From: %s <%s>\r\n", fromName, from)
 	headers += fmt.Sprintf("To: %s\r\n", to)

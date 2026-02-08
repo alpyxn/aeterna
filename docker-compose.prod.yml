@@ -33,6 +33,7 @@ services:
       - DATABASE_URL=host=db user=${DB_USER} password=${DB_PASS} dbname=${DB_NAME} port=5432 sslmode=disable
       - ENV=production
       - ALLOWED_ORIGINS=https://${DOMAIN}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - OWNER_EMAIL=${OWNER_EMAIL:-}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}

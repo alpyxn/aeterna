@@ -24,6 +24,9 @@ func SecurityHeaders(c *fiber.Ctx) error {
 	// Permissions Policy (formerly Feature-Policy)
 	c.Set("Permissions-Policy", "geolocation=(), camera=(), microphone=(), payment=()")
 
+	// Content Security Policy - prevents XSS and injection attacks
+	c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'")
+
 	// Strict Transport Security (only in production with HTTPS)
 	if os.Getenv("ENV") == "production" {
 		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")

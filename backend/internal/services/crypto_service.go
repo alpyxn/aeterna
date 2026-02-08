@@ -5,12 +5,8 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
-	"errors"
 	"io"
-
-	"github.com/alpyxn/aeterna/backend/internal/database"
-	"github.com/alpyxn/aeterna/backend/internal/models"
-	"gorm.io/gorm"
+	"os"
 )
 
 type CryptoService struct{}
@@ -18,39 +14,18 @@ type CryptoService struct{}
 const cryptoPrefix = "enc:"
 
 func (s CryptoService) getOrCreateKey() (string, error) {
-	var settings models.Settings
-	result := database.DB.First(&settings)
-	if result.Error != nil {
-		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			key, err := generateKey()
-			if err != nil {
-				return "", Internal("Failed to generate encryption key", err)
-			}
-			settings = models.Settings{
-				ID:            1,
-				EncryptionKey: key,
-			}
-			if err := database.DB.Create(&settings).Error; err != nil {
-				return "", Internal("Failed to save encryption key", err)
-			}
-			return key, nil
-		}
-		return "", Internal("Failed to fetch settings", result.Error)
+	envKey := os.Getenv("ENCRYPTION_KEY")
+	if envKey == "" {
+		return "", Internal("ENCRYPTION_KEY environment variable is required", nil)
 	}
-
-	if settings.EncryptionKey == "" {
-		key, err := generateKey()
-		if err != nil {
-			return "", Internal("Failed to generate encryption key", err)
-		}
-		settings.EncryptionKey = key
-		if err := database.DB.Save(&settings).Error; err != nil {
-			return "", Internal("Failed to save encryption key", err)
-		}
-		return key, nil
+	
+	// Validate key length (should be base64 encoded 32 bytes)
+	decoded, err := base64.StdEncoding.DecodeString(envKey)
+	if err != nil || len(decoded) != 32 {
+		return "", Internal("Invalid ENCRYPTION_KEY format (must be base64 encoded 32 bytes)", nil)
 	}
-
-	return settings.EncryptionKey, nil
+	
+	return envKey, nil
 }
 
 func generateKey() (string, error) {
