@@ -18,23 +18,24 @@ func GetSettings(c *fiber.Ctx) error {
 }
 
 func SaveSettings(c *fiber.Ctx) error {
-	var req models.Settings
+	var req models.SettingsRequest
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
-	if err := settingsService.Save(req); err != nil {
+	if err := settingsService.Save(req.ToSettings()); err != nil {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true})
 }
 
 func TestSMTP(c *fiber.Ctx) error {
-	var req models.Settings
+	var req models.SettingsRequest
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
-	if err := settingsService.TestSMTP(req); err != nil {
+	if err := settingsService.TestSMTP(req.ToSettings()); err != nil {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true, "message": "Connection successful"})
 }
+
