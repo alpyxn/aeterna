@@ -28,7 +28,7 @@ func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.
 
 	content := msg.Content
 	if msg.Content != "" {
-		decrypted, err := emailCryptoService.DecryptIfNeeded(msg.Content)
+		decrypted, err := emailCryptoService.Decrypt(msg.Content)
 		if err != nil {
 			return err
 		}
