@@ -116,9 +116,9 @@ func (s SettingsService) TestSMTP(req models.Settings) error {
 	var err error
 
 	if req.SMTPPort == "465" {
-		conn, err := tls.Dial("tcp", addr, tlsConfig)
-		if err != nil {
-			return BadRequest("Failed to connect (SSL)", err)
+		conn, dialErr := tls.Dial("tcp", addr, tlsConfig)
+		if dialErr != nil {
+			return BadRequest("Failed to connect (SSL)", dialErr)
 		}
 		client, err = smtp.NewClient(conn, req.SMTPHost)
 		if err != nil {
@@ -143,10 +143,43 @@ func (s SettingsService) TestSMTP(req models.Settings) error {
 	}
 	defer client.Close()
 
+	// Try PLAIN auth first, then LOGIN auth as fallback (for Yandex and others)
 	auth := smtp.PlainAuth("", req.SMTPUser, req.SMTPPass, req.SMTPHost)
 	if err := client.Auth(auth); err != nil {
-		return BadRequest("Authentication failed", err)
+		// Try LOGIN auth as fallback
+		loginAuth := LoginAuth(req.SMTPUser, req.SMTPPass)
+		if loginErr := client.Auth(loginAuth); loginErr != nil {
+			return BadRequest("Authentication failed", err)
+		}
 	}
 
 	return nil
 }
+
+// LoginAuth implements LOGIN authentication mechanism
+type loginAuth struct {
+	username, password string
+}
+
+func LoginAuth(username, password string) smtp.Auth {
+	return &loginAuth{username, password}
+}
+
+func (a *loginAuth) Start(server *smtp.ServerInfo) (string, []byte, error) {
+	return "LOGIN", []byte{}, nil
+}
+
+func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
+	if more {
+		switch string(fromServer) {
+		case "Username:":
+			return []byte(a.username), nil
+		case "Password:":
+			return []byte(a.password), nil
+		default:
+			return nil, errors.New("unknown LOGIN challenge")
+		}
+	}
+	return nil, nil
+}
+
