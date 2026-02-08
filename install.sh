@@ -68,6 +68,107 @@ print_help() {
     echo ""
 }
 
+# Detect OS type
+detect_os() {
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_ID="${ID}"
+        OS_ID_LIKE="${ID_LIKE:-}"
+    elif [ -f /etc/redhat-release ]; then
+        OS_ID="rhel"
+        OS_ID_LIKE="rhel fedora"
+    elif [ -f /etc/debian_version ]; then
+        OS_ID="debian"
+        OS_ID_LIKE="debian"
+    else
+        OS_ID="unknown"
+        OS_ID_LIKE=""
+    fi
+}
+
+# Check if system is apt-based (Debian/Ubuntu)
+is_apt_based() {
+    [[ "$OS_ID" == "debian" || "$OS_ID" == "ubuntu" || "$OS_ID_LIKE" == *"debian"* ]]
+}
+
+# Check if system is dnf-based (Fedora)
+is_dnf_based() {
+    [[ "$OS_ID" == "fedora" || ("$OS_ID_LIKE" == *"fedora"* && -x "$(command -v dnf)") ]]
+}
+
+# Check if system is yum-based (RHEL/CentOS)
+is_yum_based() {
+    [[ "$OS_ID" == "rhel" || "$OS_ID" == "centos" || "$OS_ID" == "rocky" || "$OS_ID" == "almalinux" || "$OS_ID_LIKE" == *"rhel"* ]]
+}
+
+# Install Docker Compose v2 (cross-platform)
+install_docker_compose() {
+    detect_os
+    
+    local installed=false
+    
+    # Try package manager first
+    if is_apt_based; then
+        info "Detected apt-based system (${OS_ID})"
+        # Try Docker's official repository first
+        if sudo apt-get update && sudo apt-get install -y docker-compose-plugin 2>/dev/null; then
+            installed=true
+        fi
+    elif is_dnf_based; then
+        info "Detected dnf-based system (${OS_ID})"
+        if sudo dnf install -y docker-compose-plugin 2>/dev/null; then
+            installed=true
+        fi
+    elif is_yum_based; then
+        info "Detected yum-based system (${OS_ID})"
+        if sudo yum install -y docker-compose-plugin 2>/dev/null; then
+            installed=true
+        fi
+    fi
+    
+    # Fallback: Download binary directly from GitHub
+    if [ "$installed" = false ]; then
+        warning "Package manager installation failed, downloading binary..."
+        
+        local arch=$(uname -m)
+        case "$arch" in
+            x86_64) arch="x86_64" ;;
+            aarch64|arm64) arch="aarch64" ;;
+            armv7l) arch="armv7" ;;
+            *) error "Unsupported architecture: $arch" ;;
+        esac
+        
+        local compose_version=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        if [ -z "$compose_version" ]; then
+            compose_version="v2.24.5"  # Fallback version
+        fi
+        
+        info "Downloading Docker Compose ${compose_version} for ${arch}..."
+        
+        # Create Docker CLI plugins directory
+        local plugin_dir="/usr/local/lib/docker/cli-plugins"
+        sudo mkdir -p "$plugin_dir"
+        
+        # Download and install
+        if sudo curl -SL "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-${arch}" -o "${plugin_dir}/docker-compose"; then
+            sudo chmod +x "${plugin_dir}/docker-compose"
+            installed=true
+        fi
+        
+        # Also try user-level plugin directory if system-level failed
+        if [ "$installed" = false ]; then
+            plugin_dir="${HOME}/.docker/cli-plugins"
+            mkdir -p "$plugin_dir"
+            if curl -SL "https://github.com/docker/compose/releases/download/${compose_version}/docker-compose-linux-${arch}" -o "${plugin_dir}/docker-compose"; then
+                chmod +x "${plugin_dir}/docker-compose"
+                installed=true
+            fi
+        fi
+    fi
+    
+    return $([ "$installed" = true ] && echo 0 || echo 1)
+}
+
 # Check if command exists
 check_command() {
     if ! command -v "$1" &> /dev/null; then
@@ -149,8 +250,12 @@ check_requirements() {
     # Check Docker Compose
     if ! docker compose version &> /dev/null; then
         warning "Docker Compose v2 not found. Installing..."
-        sudo apt-get update && sudo apt-get install -y docker-compose-plugin
-        success "Docker Compose installed"
+        install_docker_compose
+        if docker compose version &> /dev/null; then
+            success "Docker Compose installed: $(docker compose version --short)"
+        else
+            error "Failed to install Docker Compose. Please install it manually."
+        fi
     else
         success "Docker Compose found: $(docker compose version --short)"
     fi
