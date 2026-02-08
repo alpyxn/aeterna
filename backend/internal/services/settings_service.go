@@ -81,11 +81,17 @@ func (s SettingsService) Save(req models.Settings) error {
 	existing.SMTPHost = req.SMTPHost
 	existing.SMTPPort = req.SMTPPort
 	existing.SMTPUser = req.SMTPUser
-	existing.SMTPPass = req.SMTPPass
+	// Only update password if a new one is provided
+	if req.SMTPPass != "" {
+		existing.SMTPPass = req.SMTPPass
+	}
 	existing.SMTPFrom = req.SMTPFrom
 	existing.SMTPFromName = req.SMTPFromName
 	existing.WebhookURL = req.WebhookURL
-	existing.WebhookSecret = req.WebhookSecret
+	// Only update webhook secret if a new one is provided
+	if req.WebhookSecret != "" {
+		existing.WebhookSecret = req.WebhookSecret
+	}
 	existing.WebhookEnabled = req.WebhookEnabled
 
 	if err := database.DB.Save(&existing).Error; err != nil {
