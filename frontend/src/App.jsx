@@ -52,7 +52,7 @@ function App() {
         onLogout={handleLogout}
       />
 
-      <main className="container mx-auto px-4 pt-28 pb-16 flex flex-col items-center">
+      <main className="container mx-auto px-3 sm:px-4 pt-20 sm:pt-28 pb-12 sm:pb-16 flex flex-col items-center">
         {isLocked ? (
           <VaultLock onUnlock={handleUnlock} />
         ) : (
@@ -63,7 +63,7 @@ function App() {
           </>
         )}
 
-        <div className="mt-12 text-dark-500 text-xs flex items-center gap-4">
+        <div className="mt-8 sm:mt-12 text-dark-500 text-[10px] sm:text-xs flex items-center gap-3 sm:gap-4">
           <span>&copy; 2026 Aeterna</span>
           <span className="w-1 h-1 rounded-full bg-dark-700" />
           <span>Dead Man's Switch</span>

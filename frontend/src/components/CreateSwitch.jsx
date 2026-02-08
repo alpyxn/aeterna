@@ -178,7 +178,6 @@ export default function CreateSwitch() {
             </Card>
 
             <div className="text-center text-xs text-dark-500 space-y-1">
-                <p>Your message will be stored securely on our servers</p>
                 <p>Make sure to send heartbeats from the Dashboard to prevent delivery</p>
             </div>
         </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Shield, LayoutDashboard, PlusCircle, LogOut, Settings, Menu, X } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, LogOut, Settings, Menu, X } from 'lucide-react';
 import { Button } from "@/components/ui/button"
 
 export default function Header({ currentRoute, setRoute, onLogout }) {
@@ -24,15 +24,14 @@ export default function Header({ currentRoute, setRoute, onLogout }) {
         <header className="fixed top-0 left-0 right-0 z-50 border-b border-dark-700 bg-dark-950/95 backdrop-blur-sm">
             <div className="container mx-auto px-4 h-14 flex items-center justify-between">
                 <div
-                    className="flex items-center gap-2.5 cursor-pointer"
+                    className="flex items-center gap-2.5 cursor-pointer group"
                     onClick={() => {
                         setRoute('home');
                         setMobileMenuOpen(false);
                     }}
                 >
-                    <Shield className="w-5 h-5 text-teal-400" />
-                    <span className="font-semibold text-dark-100 tracking-tight">
-                        Aeterna
+                    <span className="text-lg font-bold tracking-[0.2em] text-dark-100 group-hover:text-teal-400 transition-colors">
+                        AETERNA
                     </span>
                 </div>
 
