@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"time"
@@ -10,7 +11,9 @@ import (
 	"github.com/alpyxn/aeterna/backend/internal/logging"
 	"github.com/alpyxn/aeterna/backend/internal/middleware"
 	"github.com/alpyxn/aeterna/backend/internal/models"
+	"github.com/alpyxn/aeterna/backend/internal/services"
 	"github.com/alpyxn/aeterna/backend/internal/worker"
+	"github.com/google/uuid"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
@@ -19,10 +22,32 @@ import (
 )
 
 func main() {
+	// Parse CLI flags
+	encryptionKeyFile := flag.String("encryption-key-file", "", "Path to file containing encryption key (fallback, must have 0600 permissions)")
+	flag.Parse()
+
+	// Initialize logging first
 	logging.Init()
+
+	// Initialize encryption key manager (CRITICAL - must happen before any encryption operations)
+	services.InitKeyManager(*encryptionKeyFile)
+
+	// Validate encryption key is available (fail fast if not)
+	// The InitKeyManager already tries to load the key, so we just need to verify it worked
+	// by attempting to use the crypto service
+	cryptoService := services.CryptoService{}
+	_, err := cryptoService.Encrypt("test")
+	if err != nil {
+		log.Fatalf("FATAL: Failed to initialize encryption key: %v\n\n"+
+			"Please configure one of the following:\n"+
+			"  1. Docker Secrets: mount key at /run/secrets/encryption_key\n"+
+			"  2. Secure file: use --encryption-key-file flag (file must have 0600 permissions)\n"+
+			"\n"+
+			"For more information, see: https://github.com/alpyxn/aeterna/blob/main/README.md", err)
+	}
 	if os.Getenv("ENV") == "production" {
-		if os.Getenv("DATABASE_URL") == "" {
-			log.Fatal("DATABASE_URL must be set in production")
+		if os.Getenv("DATABASE_PATH") == "" {
+			log.Fatal("DATABASE_PATH must be set in production")
 		}
 		if os.Getenv("ALLOWED_ORIGINS") == "" {
 			log.Fatal("ALLOWED_ORIGINS must be set in production")
@@ -35,41 +60,35 @@ func main() {
 	// Initialize Database
 	database.Connect()
 	
-	// Auto Migrate
-	database.DB.AutoMigrate(&models.Message{}, &models.Settings{}, &models.Webhook{})
+	// Auto Migrate - GORM handles schema creation and updates for SQLite
+	// SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS, so we rely on AutoMigrate
+	if err := database.DB.AutoMigrate(&models.Message{}, &models.Settings{}, &models.Webhook{}); err != nil {
+		log.Fatal("Failed to migrate database: ", err)
+	}
 
-	// Ensure legacy schema constraints don't block inserts
-	database.DB.Exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS key_fragment TEXT;")
-	database.DB.Exec("ALTER TABLE messages ALTER COLUMN key_fragment SET DEFAULT 'local';")
-	database.DB.Exec("UPDATE messages SET key_fragment = 'local' WHERE key_fragment IS NULL;")
-	database.DB.Exec("ALTER TABLE messages ALTER COLUMN key_fragment SET NOT NULL;")
-
-	database.DB.Exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS management_token UUID;")
-	database.DB.Exec("ALTER TABLE messages ALTER COLUMN management_token SET DEFAULT gen_random_uuid();")
-	database.DB.Exec("UPDATE messages SET management_token = gen_random_uuid() WHERE management_token IS NULL;")
-	database.DB.Exec("ALTER TABLE messages ALTER COLUMN management_token SET NOT NULL;")
-
-	// Legacy content column may still be NOT NULL in some schemas
-	database.DB.Exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS content TEXT;")
-	database.DB.Exec("ALTER TABLE messages ALTER COLUMN content SET DEFAULT ''; ")
-	database.DB.Exec("UPDATE messages SET content = '' WHERE content IS NULL;")
-	database.DB.Exec("ALTER TABLE messages ALTER COLUMN content SET NOT NULL;")
-
-	// Ensure settings table has encryption key column
-	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS encryption_key TEXT;")
-	// Webhook settings columns
-	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS webhook_url TEXT;")
-	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS webhook_secret TEXT;")
-	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS webhook_enabled BOOLEAN DEFAULT FALSE;")
-	database.DB.Exec("UPDATE settings SET webhook_enabled = FALSE WHERE webhook_enabled IS NULL;")
-
-	// Owner email and heartbeat token columns
-	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS owner_email TEXT;")
-	database.DB.Exec("ALTER TABLE settings ADD COLUMN IF NOT EXISTS heartbeat_token TEXT;")
-
-	// Reminder sent column for messages
-	database.DB.Exec("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reminder_sent BOOLEAN DEFAULT FALSE;")
-	database.DB.Exec("UPDATE messages SET reminder_sent = FALSE WHERE reminder_sent IS NULL;")
+	// SQLite migration: Update existing records with default values if needed
+	// These are safe operations that work with SQLite
+	
+	// Ensure key_fragment has default value for existing records
+	database.DB.Exec("UPDATE messages SET key_fragment = 'local' WHERE key_fragment IS NULL OR key_fragment = '';")
+	
+	// Ensure management_token is set for existing records (BeforeCreate hook handles new ones)
+	// For SQLite, we need to update in Go since SQLite doesn't have uuid generation
+	var messagesWithoutToken []models.Message
+	database.DB.Where("management_token IS NULL OR management_token = ''").Find(&messagesWithoutToken)
+	for i := range messagesWithoutToken {
+		messagesWithoutToken[i].ManagementToken = uuid.NewString()
+		database.DB.Save(&messagesWithoutToken[i])
+	}
+	
+	// Ensure encrypted_content is not null for existing records
+	database.DB.Exec("UPDATE messages SET encrypted_content = '' WHERE encrypted_content IS NULL;")
+	
+	// Ensure webhook_enabled has default value
+	database.DB.Exec("UPDATE settings SET webhook_enabled = 0 WHERE webhook_enabled IS NULL;")
+	
+	// Ensure reminder_sent has default value
+	database.DB.Exec("UPDATE messages SET reminder_sent = 0 WHERE reminder_sent IS NULL;")
 
 	app := fiber.New(fiber.Config{
 		BodyLimit: 1 * 1024 * 1024, // 1MB limit to prevent DoS
@@ -136,7 +155,9 @@ func main() {
 	api.Post("/auth/logout", handlers.Logout)
 
 	// Quick heartbeat (no auth, token-based)
+	// GET: Shows page with button, POST: Triggers heartbeat
 	api.Get("/quick-heartbeat/:token", handlers.QuickHeartbeat)
+	api.Post("/quick-heartbeat/:token", handlers.QuickHeartbeat)
 
 	// Protected Management
 	mgmt := api.Group("/", middleware.MasterAuth)

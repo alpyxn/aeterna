@@ -42,7 +42,7 @@ func (s WebhookService) SendTriggerWebhooks(webhooks []models.Webhook, msg model
 
 	payload := triggerPayload{
 		Event:           "switch.triggered",
-		MessageID:       msg.ID.String(),
+		MessageID:       msg.ID,
 		RecipientEmail:  msg.RecipientEmail,
 		Content:         content,
 		TriggerDuration: msg.TriggerDuration,

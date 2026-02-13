@@ -3,30 +3,49 @@ package database
 import (
 	"log"
 	"os"
+	"path/filepath"
 
-	"gorm.io/driver/postgres"
-
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 var DB *gorm.DB
 
 func Connect() {
-	dsn := os.Getenv("DATABASE_URL")
-	if dsn == "" {
-		dsn = "host=localhost user=postgres password=postgres dbname=aeterna port=5432 sslmode=disable"
+	dbPath := os.Getenv("DATABASE_PATH")
+	if dbPath == "" {
+		dbPath = "./data/aeterna.db"
+	}
+
+	// Warn if PostgreSQL environment variables are set (Aeterna uses SQLite only)
+	if os.Getenv("DB_HOST") != "" || os.Getenv("POSTGRES_HOST") != "" || os.Getenv("DATABASE_URL") != "" {
+		log.Println("WARNING: PostgreSQL environment variables detected, but Aeterna uses SQLite only.")
+		log.Println("Ignoring PostgreSQL configuration and using SQLite at:", dbPath)
+	}
+
+	// Create data directory if it doesn't exist
+	dbDir := filepath.Dir(dbPath)
+	if dbDir != "." && dbDir != "" {
+		if err := os.MkdirAll(dbDir, 0755); err != nil {
+			log.Fatal("Failed to create database directory: ", err)
+		}
 	}
 
 	var err error
-	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
-		log.Fatal("Failed to connect to database: ", err)
+		log.Fatal("Failed to connect to SQLite database at ", dbPath, ": ", err)
 	}
 
-	// Ensure UUID generation is available
-	if err := DB.Exec("CREATE EXTENSION IF NOT EXISTS pgcrypto;").Error; err != nil {
-		log.Fatal("Failed to enable pgcrypto extension: ", err)
+	// Enable foreign keys for SQLite
+	if err := DB.Exec("PRAGMA foreign_keys = ON;").Error; err != nil {
+		log.Fatal("Failed to enable foreign keys: ", err)
 	}
 
-	log.Println("Database connection successfully opened")
+	// Enable WAL mode for better concurrent access
+	if err := DB.Exec("PRAGMA journal_mode = WAL;").Error; err != nil {
+		log.Println("Warning: Failed to enable WAL mode:", err)
+	}
+
+	log.Println("Database connection successfully opened:", dbPath)
 }

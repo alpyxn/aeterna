@@ -8,23 +8,13 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=host=db user=postgres password=postgres dbname=aeterna port=5432 sslmode=disable
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-
-    depends_on:
-      - db
-    restart: always
-
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: aeterna
-    ports:
-      - "5432:5432"
+      - DATABASE_PATH=/app/data/aeterna.db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data:/app/data
+    command: ["./main", "--encryption-key-file=/run/secrets/encryption_key"]
+    secrets:
+      - encryption_key
+    restart: always
 
   frontend:
     build:
@@ -39,7 +29,7 @@ services:
     environment:
       - VITE_API_URL=${VITE_API_URL}
 
-volumes:
-  postgres_data:
-
+secrets:
+  encryption_key:
+    file: ./secrets/encryption_key
 

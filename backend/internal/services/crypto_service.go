@@ -6,34 +6,61 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"io"
-	"os"
+	"log/slog"
+	"sync"
 )
 
 type CryptoService struct{}
 
 const cryptoPrefix = "enc:"
 
-func (s CryptoService) getOrCreateKey() (string, error) {
-	envKey := os.Getenv("ENCRYPTION_KEY")
-	if envKey == "" {
-		return "", Internal("ENCRYPTION_KEY environment variable is required", nil)
-	}
-	
-	// Validate key length (should be base64 encoded 32 bytes)
-	decoded, err := base64.StdEncoding.DecodeString(envKey)
-	if err != nil || len(decoded) != 32 {
-		return "", Internal("Invalid ENCRYPTION_KEY format (must be base64 encoded 32 bytes)", nil)
-	}
-	
-	return envKey, nil
+var (
+	keyManager     *KeySourceManager
+	keyManagerOnce sync.Once
+	cachedKey      string
+	cachedKeyOnce  sync.Once
+	keySourceName  string
+)
+
+// InitKeyManager initializes the key manager with the given encryption key file path
+// This should be called once at application startup
+func InitKeyManager(encryptionKeyFile string) {
+	keyManagerOnce.Do(func() {
+		keyManager = NewKeySourceManager(encryptionKeyFile)
+		// Try to get the key once to cache it and log which source was used
+		key, err := keyManager.GetKey()
+		if err == nil {
+			cachedKey = key
+			keySourceName = keyManager.GetSourceName()
+			slog.Info("Encryption key loaded", "source", keySourceName)
+		}
+	})
 }
 
-func generateKey() (string, error) {
-	buf := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, buf); err != nil {
-		return "", err
+func (s CryptoService) getOrCreateKey() (string, error) {
+	// Use cached key if available (thread-safe)
+	if cachedKey != "" {
+		return cachedKey, nil
 	}
-	return base64.StdEncoding.EncodeToString(buf), nil
+
+	// If not cached, try to get from manager
+	if keyManager == nil {
+		return "", Internal("Encryption key manager not initialized. Call InitKeyManager() at startup.", nil)
+	}
+
+	key, err := keyManager.GetKey()
+	if err != nil {
+		return "", Internal("Failed to retrieve encryption key", err)
+	}
+
+	// Cache the key for future use
+	cachedKeyOnce.Do(func() {
+		cachedKey = key
+		keySourceName = keyManager.GetSourceName()
+		slog.Info("Encryption key loaded", "source", keySourceName)
+	})
+
+	return key, nil
 }
 
 func (s CryptoService) Encrypt(plaintext string) (string, error) {

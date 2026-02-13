@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React">
-  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite">
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="GPL-3.0 License">
 </p>
@@ -30,37 +30,62 @@ curl -fsSL https://raw.githubusercontent.com/alpyxn/aeterna/main/install.sh | ba
 
 Requires: Linux server, domain name, ports 80/443 open.
 
-## Manual Setup
+## Installation
+
+### Option 1: One-Click (Recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/alpyxn/aeterna/main/install.sh | bash
+```
+
+### Option 2: Clone & Run
 
 ```bash
 git clone https://github.com/alpyxn/aeterna.git
 cd aeterna
-cp .env.production.example .env
-# Configure your settings
-docker compose -f docker-compose.prod.yml up -d
+./install.sh
 ```
 
-## How It Works
+### Installation Modes
 
-1. Write a message, set a recipient
-2. Choose your check-in interval (1 hour to 1 year)
-3. Check in before the timer expires
-4. Miss a check-in, and your message is delivered
+During installation, you will be prompted to choose a mode:
+
+1. **Production (Nginx + SSL)** - *Recommended*
+   - Automatic HTTPS with Let's Encrypt
+   - Nginx reverse proxy
+   - Secure headers and configuration
+
+2. **Development (Simple)** - *Not Recommended for Production*
+   - Runs directly on port 5000 (IP address only)
+   - **No encryption/SSL** - insecure for sensitive data
+   - Useful only for local testing or development
+
+## Management
+
+The `install.sh` script includes management commands:
+
+| Command | Description |
+|---------|-------------|
+| `./install.sh --update` | Update to the latest version |
+| `./install.sh --backup` | Create a full backup of data and config |
+| `./install.sh --status` | Check service health and status |
+| `./install.sh --uninstall` | Remove containers and installation |
 
 ## Configuration
 
-| Variable | Purpose |
-|----------|---------|
-| `DOMAIN` | Your domain name |
-| `ACME_EMAIL` | For SSL certificates |
-| `DB_USER`, `DB_PASS`, `DB_NAME` | Database credentials |
-| `ENCRYPTION_KEY` | Message encryption key |
+The installer guides you through interactive configuration:
+- **Domain**: Your domain name (required for SSL)
+- **SMTP**: Email settings for notifications
+- **Database**: Location for SQLite data (default: `./data`)
 
-SMTP settings are configured through the web interface after installation.
+Post-installation, settings can be found in the `.env` file.
 
 ## Security
 
-All messages are encrypted at rest using AES-256. Authentication is rate-limited. HTTPS is automatic via Let's Encrypt. Your words stay private until they're meant to be read.
+Aeterna handles security automatically:
+- **Encryption**: Messages are encrypted at rest (AES-256-GCM).
+- **Key Management**: The encryption key is generated securely and stored in `secrets/encryption_key`. It is **never** exposed in environment variables.
+- **SSL**: Automatic certificate management via Let's Encrypt (in Production mode).
 
 ## Architecture
 
@@ -69,13 +94,7 @@ backend/     Go API server
 frontend/    React application  
 ```
 
-Both containerized. PostgreSQL for storage. Traefik for routing.
-
-## Updates
-
-```bash
-git pull && docker compose -f docker-compose.prod.yml up -d --build
-```
+Both containerized. SQLite for storage (single file database). nginx for reverse proxy and SSL.
 
 ## License
 

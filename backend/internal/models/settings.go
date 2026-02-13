@@ -12,7 +12,7 @@ type Settings struct {
 	MasterPasswordHash string `gorm:"column:master_password_hash" json:"-"`
 	WebhookURL         string `gorm:"column:webhook_url" json:"webhook_url"`
 	WebhookSecret      string `gorm:"column:webhook_secret" json:"-"` // Hidden from API responses
-	WebhookEnabled     bool   `gorm:"column:webhook_enabled;default:false" json:"webhook_enabled"`
+	WebhookEnabled     bool   `gorm:"column:webhook_enabled;default:0" json:"webhook_enabled"`
 	OwnerEmail         string `gorm:"column:owner_email" json:"owner_email"`
 	HeartbeatToken     string `gorm:"column:heartbeat_token" json:"-"`
 }

@@ -51,6 +51,7 @@ func VerifyMasterPassword(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
+	
 	if err := authService.VerifyMasterPassword(req.Password); err != nil {
 		// Record failed login attempt for rate limiting
 		middleware.RecordFailedLogin(c.IP())

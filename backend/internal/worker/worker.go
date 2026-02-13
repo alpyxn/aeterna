@@ -35,9 +35,9 @@ func checkReminders() {
 	var messages []models.Message
 	
 	// Find active messages where 50% of time has passed and reminder not sent
-	// last_seen + (trigger_duration * 0.5) < now AND reminder_sent = false
+	// last_seen + (trigger_duration * 0.5 minutes) < now AND reminder_sent = false
 	err = database.DB.Where(
-		"status = ? AND reminder_sent = ? AND last_seen < NOW() - (trigger_duration * INTERVAL '0.5 minute')",
+		"status = ? AND reminder_sent = ? AND datetime(last_seen, '+' || CAST(CAST(trigger_duration * 0.5 AS INTEGER) AS TEXT) || ' minutes') < datetime('now')",
 		models.StatusActive, false,
 	).Find(&messages).Error
 	
@@ -100,7 +100,10 @@ func checkHeartbeats() {
 	var messages []models.Message
 	
 	// Find active messages where last_seen + trigger_duration < now
-	err := database.DB.Where("status = ? AND last_seen < NOW() - (trigger_duration * INTERVAL '1 minute')", models.StatusActive).Find(&messages).Error
+	err := database.DB.Where(
+		"status = ? AND datetime(last_seen, '+' || CAST(trigger_duration AS TEXT) || ' minutes') < datetime('now')",
+		models.StatusActive,
+	).Find(&messages).Error
 	if err != nil {
 		slog.Error("Error checking heartbeats", "error", err)
 		return

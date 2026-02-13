@@ -27,7 +27,16 @@ export default function VaultLock({ onUnlock }) {
                 const data = await apiRequest('/setup/status');
                 setConfigured(Boolean(data?.configured));
             } catch (e) {
-                setConfigured(true);
+                // If API is unavailable (e.g., 502 Bad Gateway), default to false
+                // This allows users to set up their password even if backend was temporarily unavailable
+                setConfigured(false);
+                
+                // Show helpful error message for backend unavailability
+                const errorMessage = e.message || '';
+                if (errorMessage.includes('502') || errorMessage.includes('Bad Gateway') || 
+                    errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+                    setError('Backend service is unavailable. Please ensure the backend is running and try again.');
+                }
             }
         };
         checkConfigured();
@@ -81,7 +90,18 @@ export default function VaultLock({ onUnlock }) {
                 onUnlock();
             }
         } catch (e) {
-            setError(e.message || 'Invalid master credentials.');
+            const errorMessage = e.message || '';
+            // Provide helpful error messages for common issues
+            if (errorMessage.includes('502') || errorMessage.includes('Bad Gateway')) {
+                setError('Backend service is unavailable. Please check that the backend container is running.');
+            } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError')) {
+                setError('Cannot connect to backend. Please ensure the backend service is running.');
+            } else if (errorMessage.includes('already_configured')) {
+                setError('Master password is already configured. Please use the login form.');
+                setConfigured(true);
+            } else {
+                setError(errorMessage || 'Invalid master credentials.');
+            }
         } finally {
             setLoading(false);
         }

@@ -10,11 +10,11 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=host=db user=${DB_USER} password=${DB_PASS} dbname=${DB_NAME} port=5432 sslmode=disable
+      - DATABASE_PATH=/app/data/aeterna.db
       - ENV=production
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
       - BASE_URL=${BASE_URL:-http://${DOMAIN}:5000}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # Encryption key is provided via Docker secrets (mounted at /run/secrets/encryption_key)
       - OWNER_EMAIL=${OWNER_EMAIL:-}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -22,20 +22,11 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - SMTP_FROM=${SMTP_FROM:-}
       - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Aeterna}
-    depends_on:
-      - db
-    restart: always
-    networks:
-      - aeterna-net
-
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
+    command: ["./main", "--encryption-key-file=/run/secrets/encryption_key"]
+    secrets:
+      - encryption_key
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./data:/app/data
     restart: always
     networks:
       - aeterna-net
@@ -66,8 +57,9 @@ services:
     networks:
       - aeterna-net
 
-volumes:
-  postgres_data:
+secrets:
+  encryption_key:
+    file: ./secrets/encryption_key
 
 networks:
   aeterna-net:

@@ -23,7 +23,8 @@ const SMTP_GUIDES = [
         port: '587',
         security: 'STARTTLS',
         note: 'Requires App Password. Go to Google Account → Security → 2-Step Verification → App passwords',
-        link: 'https://support.google.com/accounts/answer/185833'
+        link: 'https://support.google.com/accounts/answer/185833',
+        recommended: true
     },
     {
         name: 'Yandex',
@@ -77,12 +78,12 @@ const SMTP_GUIDES = [
 
 export default function Settings() {
     const [config, setConfig] = useState({
-        smtp_host: '',
+        smtp_host: 'smtp.gmail.com',
         smtp_port: '587',
         smtp_user: '',
         smtp_pass: '',
         smtp_from: '',
-        smtp_from_name: 'Aeterna Vault'
+        smtp_from_name: 'Aeterna'
     });
     const [configLoading, setConfigLoading] = useState(true);
     const [loading, setLoading] = useState(false);
@@ -94,7 +95,7 @@ export default function Settings() {
     const [webhooks, setWebhooks] = useState([]);
     const [webhookLoading, setWebhookLoading] = useState(false);
     const [showWebhookSecret, setShowWebhookSecret] = useState(false);
-    const [showGuide, setShowGuide] = useState(false);
+    const [showGuide, setShowGuide] = useState(true);
 
     useEffect(() => {
         fetchConfig();
@@ -252,6 +253,11 @@ export default function Settings() {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
                                         <span className="font-medium text-sm text-dark-100">{guide.name}</span>
+                                        {guide.recommended && (
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-teal-500/20 text-teal-400 border border-teal-500/30">
+                                                Recommended
+                                            </span>
+                                        )}
                                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${guide.security === 'SSL' ? 'bg-purple-500/20 text-purple-400' : 'bg-teal-500/20 text-teal-400'}`}>
                                             {guide.security}
                                         </span>
