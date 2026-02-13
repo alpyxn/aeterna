@@ -1,0 +1,20 @@
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+*.env
+
+# Build Artifacts
+dist/
+build/
+bin/
+
+# Dependencies
+node_modules/
+vendor/
+
+# OS/IDE
+.DS_Store
+.idea/
+.vscode/
