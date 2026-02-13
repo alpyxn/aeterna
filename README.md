@@ -25,22 +25,6 @@ Aeterna holds these words. It watches. It waits. And when the time comes, it del
 ## Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alpyxn/aeterna/main/install.sh | bash
-```
-
-Requires: Linux server, domain name, ports 80/443 open.
-
-## Installation
-
-### Option 1: One-Click (Recommended)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/alpyxn/aeterna/main/install.sh | bash
-```
-
-### Option 2: Clone & Run
-
-```bash
 git clone https://github.com/alpyxn/aeterna.git
 cd aeterna
 ./install.sh
