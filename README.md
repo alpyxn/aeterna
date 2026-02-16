@@ -1,6 +1,10 @@
 # Aeterna
 
 <p align="center">
+  <img src="assets/hero.png" alt="Aeterna Logo" width="600">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React">
   <img src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite">
@@ -27,6 +31,12 @@ Aeterna holds these words. It watches. It waits. And when the time comes, it del
 - **One-Click Install**: Comprehensive installation wizard.
 - **Heartbeat System**: Simple check-in mechanism via web UI or a quick-link from your email.
 - **Privacy-Focused Architecture**: Messages and attachments are encrypted at rest (AES-256-GCM) on your private server, ensuring they are only decrypted at the moment of delivery.
+
+<p align="center">
+  <img src="assets/screenshots/dashboard.png" alt="Aeterna Dashboard" width="800">
+  <br>
+  <em>User Dashboard - Manage your switches and check-in status.</em>
+</p>
 
 ## Quick Start
 
@@ -68,6 +78,12 @@ The installer guides you through basic configuration:
 - **Encryption**: Automatically generates a unique AES-256 key
 
 **SMTP Settings** (required for sending emails) are configured post-installation through the application's **Settings** menu. This allows for live testing and easier management.
+
+<p align="center">
+  <img src="assets/screenshots/settings.png" alt="Aeterna Settings" width="800">
+  <br>
+  <em>SMTP and Webhook Configuration</em>
+</p>
 
 ## Security
 
