@@ -687,8 +687,7 @@ setup_repository() {
     else
         sudo mkdir -p "$INSTALL_DIR"
         sudo chown "$USER":"$USER" "$INSTALL_DIR"
-        # TODO: Remove --branch test-lab after merging to main
-        git clone --branch test-lab https://github.com/alpyxn/aeterna.git "$INSTALL_DIR"
+        git clone https://github.com/alpyxn/aeterna.git "$INSTALL_DIR"
         success "Repository cloned"
     fi
     
