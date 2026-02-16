@@ -603,33 +603,6 @@ collect_config() {
     echo -e "${DIM}Database file location: ${INSTALL_DIR:-/opt/aeterna}/data/aeterna.db${NC}"
     echo ""
     
-    # SMTP Configuration
-    echo ""
-    echo -e "${CYAN}📧 Email (SMTP) Configuration${NC}"
-    echo -e "${DIM}Required for sending Dead Man's Switch notifications${NC}"
-    echo ""
-    
-    if prompt_yn "Configure SMTP now? (can be done later in Settings)" "y"; then
-        CONFIGURE_SMTP=true
-        
-        echo ""
-        echo -e "${DIM}Common SMTP providers:${NC}"
-        echo -e "${DIM}  Gmail:     smtp.gmail.com:587${NC}"
-        echo -e "${DIM}  Outlook:   smtp-mail.outlook.com:587${NC}"
-        echo -e "${DIM}  SendGrid:  smtp.sendgrid.net:587${NC}"
-        echo ""
-        
-        prompt SMTP_HOST "SMTP Server" "smtp.gmail.com"
-        prompt SMTP_PORT "SMTP Port" "587"
-        prompt SMTP_USER "SMTP Username (email)" ""
-        prompt SMTP_PASS "SMTP Password (app password)" "" "true"
-        prompt SMTP_FROM "From Email Address" "$SMTP_USER"
-        prompt SMTP_FROM_NAME "From Name" "Aeterna"
-    else
-        CONFIGURE_SMTP=false
-        warning "SMTP not configured. You can set it up later in the application settings."
-    fi
-    
     # Installation Directory
     echo ""
     echo -e "${CYAN}📁 Installation Directory${NC}"
@@ -665,13 +638,7 @@ confirm_installation() {
     echo ""
     echo -e "  ${CYAN}Database:${NC}         SQLite (file: $INSTALL_DIR/data/aeterna.db)"
     echo ""
-    if [ "$CONFIGURE_SMTP" = true ]; then
-        echo -e "  ${CYAN}SMTP Server:${NC}     $SMTP_HOST:$SMTP_PORT"
-        echo -e "  ${CYAN}SMTP User:${NC}       $SMTP_USER"
-        echo -e "  ${CYAN}SMTP From:${NC}       $SMTP_FROM_NAME <$SMTP_FROM>"
-    else
-        echo -e "  ${CYAN}SMTP:${NC}            Not configured"
-    fi
+    echo ""
     echo ""
     echo -e "  ${CYAN}Install Dir:${NC}     $INSTALL_DIR"
     echo ""
@@ -928,20 +895,6 @@ VITE_API_URL=/api
 # Installation Mode
 PROXY_MODE=$PROXY_MODE
 EOF
-
-    # Add SMTP configuration if provided
-    if [ "${CONFIGURE_SMTP:-false}" = "true" ]; then
-        cat >> "$env_temp" << EOF
-
-# SMTP Configuration
-SMTP_HOST=$SMTP_HOST
-SMTP_PORT=${SMTP_PORT:-587}
-SMTP_USER=$SMTP_USER
-SMTP_PASS=$SMTP_PASS
-SMTP_FROM=$SMTP_FROM
-SMTP_FROM_NAME=${SMTP_FROM_NAME:-Aeterna}
-EOF
-    fi
 
     # Set permissions before moving
     if ! chmod 600 "$env_temp" 2>/dev/null; then
@@ -1579,9 +1532,7 @@ print_completion() {
     echo "  • Keep this file secure! It's required to decrypt your messages."
     echo ""
     
-    if [ "$CONFIGURE_SMTP" != true ]; then
-        echo "  • Configure SMTP in Settings for email delivery"
-    fi
+    echo "  • Configure SMTP in Settings for email delivery"
     echo ""
     
     echo -e "  ${BOLD}🔧 Useful Commands:${NC}"
