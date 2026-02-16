@@ -51,6 +51,7 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 <html>
 <head>
     <title>Heartbeat Confirmed - Aeterna</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { 
@@ -82,7 +83,7 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 </body>
 </html>
 `
-		c.Set("Content-Type", "text/html")
+		c.Set("Content-Type", "text/html; charset=utf-8")
 		return c.SendString(html)
 	}
 
@@ -91,6 +92,7 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 <html>
 <head>
     <title>Send Heartbeat - Aeterna</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { 
@@ -208,7 +210,7 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 </body>
 </html>
 `
-	c.Set("Content-Type", "text/html")
+	c.Set("Content-Type", "text/html; charset=utf-8")
 	return c.SendString(html)
 }
 
