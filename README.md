@@ -16,11 +16,17 @@ Aeterna is a dead man's switch. You write messages. You check in regularly. If y
 
 It's that simple. And that important.
 
-## The Concept
-
-Some things need to be said, but only at the right time. A password that should reach your partner. A letter that waits for the right moment. Instructions that matter only when you're not there to give them.
-
 Aeterna holds these words. It watches. It waits. And when the time comes, it delivers.
+
+## Key Features
+
+- **Email Delivery**: Automatic delivery of your messages and files to your loved ones if you fail to check in.
+- **Webhook Integration**: Trigger external services (home automation, custom scripts, etc.) when your switch is activated.
+- **File Attachments**: Securely attach sensitive documents, photos, or instructions to your switches.
+- **Auto-Cleanup**: Attachments are automatically deleted from the server immediately after delivery for maximum privacy.
+- **One-Click Install**: Comprehensive installation wizard.
+- **Heartbeat System**: Simple check-in mechanism via web UI or a quick-link from your email.
+- **Privacy-Focused Architecture**: Messages and attachments are encrypted at rest (AES-256-GCM) on your private server, ensuring they are only decrypted at the moment of delivery.
 
 ## Quick Start
 
@@ -57,18 +63,18 @@ The `install.sh` script includes management commands:
 
 ## Configuration
 
-The installer guides you through interactive configuration:
+The installer guides you through basic configuration:
 - **Domain**: Your domain name (required for SSL)
-- **SMTP**: Email settings for notifications
-- **Database**: Location for SQLite data (default: `./data`)
+- **Encryption**: Automatically generates a unique AES-256 key
 
-Post-installation, settings can be found in the `.env` file.
+**SMTP Settings** (required for sending emails) are configured post-installation through the application's **Settings** menu. This allows for live testing and easier management.
 
 ## Security
 
 Aeterna handles security automatically:
-- **Encryption**: Messages are encrypted at rest (AES-256-GCM).
-- **Key Management**: The encryption key is generated securely and stored in `secrets/encryption_key`. It is **never** exposed in environment variables.
+- **Encryption**: Messages and file attachments are encrypted at rest using AES-256-GCM.
+- **Key Management**: The encryption key is generated securely and stored in `secrets/encryption_key`. It is **never** exposed in environment variables or configuration files.
+- **Data Pruning**: File attachments are permanently deleted from the disk after successful delivery to the recipient.
 - **SSL**: Automatic certificate management via Let's Encrypt (in Production mode).
 
 ## Architecture
