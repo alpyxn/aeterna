@@ -15,6 +15,7 @@ var settingsService = services.SettingsService{}
 var emailService = services.EmailService{}
 var webhookService = services.WebhookService{}
 var webhookStore = services.WebhookStore{}
+var workerFileService = services.FileService{}
 
 func Start() {
 	ticker := time.NewTicker(1 * time.Minute)
@@ -117,20 +118,40 @@ func checkHeartbeats() {
 func triggerSwitch(msg models.Message) {
 	slog.Warn("Switch triggered", "recipient", msg.RecipientEmail, "id", msg.ID)
 	
+	// Load file attachments
+	var emailAttachments []services.EmailAttachment
+	attachments, err := workerFileService.ListByMessageID(msg.ID)
+	if err != nil {
+		slog.Error("Failed to load attachments", "error", err, "message_id", msg.ID)
+	} else {
+		for _, att := range attachments {
+			filename, mimeType, data, err := workerFileService.GetDecrypted(att.ID)
+			if err != nil {
+				slog.Error("Failed to decrypt attachment", "error", err, "attachment_id", att.ID)
+				continue
+			}
+			emailAttachments = append(emailAttachments, services.EmailAttachment{
+				Filename: filename,
+				MimeType: mimeType,
+				Data:     data,
+			})
+		}
+	}
+
 	// Get SMTP settings
 	settings, err := settingsService.Get()
 	if err != nil {
 		slog.Error("Failed to load SMTP settings", "error", err)
 	} else if settings.SMTPHost != "" {
-		// Send real email with content directly
-		err := emailService.SendTriggeredMessage(settings, msg)
+		// Send real email with content and attachments
+		err := emailService.SendTriggeredMessage(settings, msg, emailAttachments)
 		if err != nil {
 			slog.Error("Failed to send email", "error", err, "recipient", msg.RecipientEmail)
 		} else {
-			slog.Info("Email sent successfully", "recipient", msg.RecipientEmail)
+			slog.Info("Email sent successfully", "recipient", msg.RecipientEmail, "attachments", len(emailAttachments))
 		}
 	} else {
-		slog.Info("Mock email", "recipient", msg.RecipientEmail, "content", msg.Content)
+		slog.Info("Mock email", "recipient", msg.RecipientEmail, "content", msg.Content, "attachments", len(emailAttachments))
 	}
 
 	webhooks, err := webhookStore.ListEnabled()
@@ -148,6 +169,15 @@ func triggerSwitch(msg models.Message) {
 	// Update Status
 	msg.Status = models.StatusTriggered
 	database.DB.Save(&msg)
+
+	// Clean up attachment files from disk after successful trigger
+	if len(attachments) > 0 {
+		if err := workerFileService.DeleteByMessageID(msg.ID); err != nil {
+			slog.Error("Failed to clean up attachments", "error", err, "message_id", msg.ID)
+		} else {
+			slog.Info("Attachments cleaned up", "message_id", msg.ID, "count", len(attachments))
+		}
+	}
 
 	// Notify owner that the message was delivered
 	if settings.OwnerEmail != "" && settings.SMTPHost != "" {

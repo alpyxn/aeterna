@@ -57,7 +57,7 @@ function App() {
           <VaultLock onUnlock={handleUnlock} />
         ) : (
           <>
-            {route === 'home' && <CreateSwitch />}
+            {route === 'home' && <CreateSwitch setRoute={setRoute} />}
             {route === 'dashboard' && <Dashboard />}
             {route === 'settings' && <Settings />}
           </>

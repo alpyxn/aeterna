@@ -18,3 +18,7 @@ vendor/
 .DS_Store
 .idea/
 .vscode/
+
+# Secrets & Data
+secrets/
+data/

@@ -2,6 +2,8 @@ package services
 
 import (
 	"html"
+	"net/http"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode"
@@ -10,10 +12,39 @@ import (
 type ValidationService struct{}
 
 const (
-	MaxContentLength = 50000
-	MinContentLength = 1
-	MaxEmailLength   = 254
+	MaxContentLength     = 50000
+	MinContentLength     = 1
+	MaxEmailLength       = 254
+	MaxFileSize          = 10 * 1024 * 1024 // 10 MB
+	MaxTotalAttachSize   = 25 * 1024 * 1024 // 25 MB
+	MaxAttachmentsPerMsg = 5
 )
+
+var AllowedExtensions = map[string]bool{
+	".pdf":  true,
+	".txt":  true,
+	".doc":  true,
+	".docx": true,
+	".jpg":  true,
+	".jpeg": true,
+	".png":  true,
+	".gif":  true,
+	".webp": true,
+	".zip":  true,
+}
+
+var AllowedMIMEPrefixes = []string{
+	"application/pdf",
+	"text/plain",
+	"application/msword",
+	"application/vnd.openxmlformats",
+	"image/jpeg",
+	"image/png",
+	"image/gif",
+	"image/webp",
+	"application/zip",
+	"application/octet-stream", // fallback for unknown binary types like .docx
+}
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
 
@@ -116,4 +147,72 @@ func (s ValidationService) ValidateTriggerDuration(duration int) error {
 		return BadRequest("Duration cannot exceed 1 year (525600 minutes)", nil)
 	}
 	return nil
+}
+
+// ValidateFile validates a file upload: extension, MIME type, and size
+func (s ValidationService) ValidateFile(filename string, size int64, data []byte) error {
+	if size == 0 {
+		return BadRequest("File is empty", nil)
+	}
+	if size > MaxFileSize {
+		return BadRequest("File exceeds maximum size of 10 MB", nil)
+	}
+
+	// Check extension
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == "" {
+		return BadRequest("File must have an extension", nil)
+	}
+	if !AllowedExtensions[ext] {
+		return BadRequest("File type not allowed. Allowed: PDF, TXT, DOC, DOCX, JPG, PNG, GIF, WEBP, ZIP", nil)
+	}
+
+	// Check MIME type via content sniffing (first 512 bytes)
+	detectedMIME := http.DetectContentType(data)
+	mimeAllowed := false
+	for _, prefix := range AllowedMIMEPrefixes {
+		if strings.HasPrefix(detectedMIME, prefix) {
+			mimeAllowed = true
+			break
+		}
+	}
+	if !mimeAllowed {
+		return BadRequest("File content type not allowed", nil)
+	}
+
+	return nil
+}
+
+// SanitizeFilename cleans a filename to prevent path traversal and other attacks
+func (s ValidationService) SanitizeFilename(filename string) string {
+	// Extract just the base name (no directory path)
+	filename = filepath.Base(filename)
+
+	// Remove null bytes and control characters
+	cleaned := strings.Map(func(r rune) rune {
+		if r == 0 || unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, filename)
+
+	// Replace path separators
+	cleaned = strings.ReplaceAll(cleaned, "/", "_")
+	cleaned = strings.ReplaceAll(cleaned, "\\", "_")
+
+	// Remove leading dots (hidden files)
+	cleaned = strings.TrimLeft(cleaned, ".")
+
+	if cleaned == "" {
+		cleaned = "unnamed_file"
+	}
+
+	// Limit length
+	if len(cleaned) > 255 {
+		ext := filepath.Ext(cleaned)
+		name := cleaned[:255-len(ext)]
+		cleaned = name + ext
+	}
+
+	return cleaned
 }

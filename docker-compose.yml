@@ -9,12 +9,15 @@ services:
       - .env
     environment:
       - DATABASE_PATH=/app/data/aeterna.db
+      - ENV=production
     volumes:
       - ./data:/app/data
     command: ["./main", "--encryption-key-file=/run/secrets/encryption_key"]
     secrets:
       - encryption_key
     restart: always
+    networks:
+      - aeterna-net
 
   frontend:
     build:
@@ -28,8 +31,14 @@ services:
       - backend
     environment:
       - VITE_API_URL=${VITE_API_URL}
+    networks:
+      - aeterna-net
 
 secrets:
   encryption_key:
     file: ./secrets/encryption_key
+
+networks:
+  aeterna-net:
+    driver: bridge
 

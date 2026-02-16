@@ -62,7 +62,7 @@ func main() {
 	
 	// Auto Migrate - GORM handles schema creation and updates for SQLite
 	// SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS, so we rely on AutoMigrate
-	if err := database.DB.AutoMigrate(&models.Message{}, &models.Settings{}, &models.Webhook{}); err != nil {
+	if err := database.DB.AutoMigrate(&models.Message{}, &models.Settings{}, &models.Webhook{}, &models.Attachment{}); err != nil {
 		log.Fatal("Failed to migrate database: ", err)
 	}
 
@@ -90,8 +90,13 @@ func main() {
 	// Ensure reminder_sent has default value
 	database.DB.Exec("UPDATE messages SET reminder_sent = 0 WHERE reminder_sent IS NULL;")
 
+	// Create uploads directory
+	if err := services.EnsureUploadsDir(); err != nil {
+		log.Fatal("Failed to create uploads directory: ", err)
+	}
+
 	app := fiber.New(fiber.Config{
-		BodyLimit: 1 * 1024 * 1024, // 1MB limit to prevent DoS
+		BodyLimit: 12 * 1024 * 1024, // 12MB limit for file uploads
 	})
 
 	// Middleware
@@ -166,6 +171,9 @@ func main() {
 	mgmt.Delete("/messages/:id", handlers.DeleteMessage)
 	mgmt.Put("/messages/:id", handlers.UpdateMessage)
 	mgmt.Post("/heartbeat", handlers.Heartbeat)
+	mgmt.Post("/messages/:id/attachments", handlers.UploadAttachment)
+	mgmt.Get("/messages/:id/attachments", handlers.ListAttachments)
+	mgmt.Delete("/messages/:id/attachments/:attachmentId", handlers.DeleteAttachment)
 	mgmt.Get("/webhooks", handlers.ListWebhooks)
 	mgmt.Post("/webhooks", handlers.CreateWebhook)
 	mgmt.Put("/webhooks/:id", handlers.UpdateWebhook)

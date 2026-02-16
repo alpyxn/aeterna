@@ -27,6 +27,7 @@ type Message struct {
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 	DeletedAt       gorm.DeletedAt `gorm:"index" json:"-"`
+	AttachmentCount int64          `gorm:"-" json:"attachment_count"`
 }
 
 // BeforeCreate hook to generate UUID before creating

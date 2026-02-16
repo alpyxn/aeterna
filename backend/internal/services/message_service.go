@@ -13,8 +13,23 @@ type MessageService struct{}
 
 var cryptoService = CryptoService{}
 var msgValidationService = ValidationService{}
+var msgFileService = FileService{}
+var msgSettingsService = SettingsService{}
 
 func (s MessageService) Create(content, recipientEmail string, triggerDuration int) (models.Message, error) {
+	// Validate SMTP configuration before creating switch
+	settings, err := msgSettingsService.Get()
+	if err != nil {
+		return models.Message{}, err
+	}
+	if settings.SMTPUser == "" || settings.SMTPHost == "" {
+		return models.Message{}, BadRequest("SMTP_NOT_CONFIGURED: SMTP is not configured. Please go to Settings to configure your email server.", nil)
+	}
+
+	if err := msgSettingsService.TestSMTP(settings); err != nil {
+		return models.Message{}, BadRequest("SMTP_CONNECTION_FAILED: SMTP connection test failed. Please check your email settings.", err)
+	}
+
 	// Validate trigger duration
 	if err := msgValidationService.ValidateTriggerDuration(triggerDuration); err != nil {
 		return models.Message{}, err
@@ -67,6 +82,11 @@ func (s MessageService) GetByID(id string) (models.Message, error) {
 		return models.Message{}, err
 	}
 	msg.Content = decrypted
+
+	// Include attachment count
+	count, _ := msgFileService.CountByMessageID(id)
+	msg.AttachmentCount = count
+
 	return msg, nil
 }
 
@@ -81,6 +101,10 @@ func (s MessageService) List() ([]models.Message, error) {
 			return nil, err
 		}
 		messages[i].Content = decrypted
+
+		// Include attachment count
+		count, _ := msgFileService.CountByMessageID(messages[i].ID)
+		messages[i].AttachmentCount = count
 	}
 	return messages, nil
 }
@@ -113,6 +137,11 @@ func (s MessageService) Delete(id string) error {
 			return NotFound("Message not found", err)
 		}
 		return Internal("Failed to fetch message", err)
+	}
+
+	// Delete all attachments (files + DB records) first
+	if err := msgFileService.DeleteByMessageID(id); err != nil {
+		return Internal("Failed to delete attachments", err)
 	}
 
 	if err := database.DB.Unscoped().Delete(&msg).Error; err != nil {

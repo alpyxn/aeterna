@@ -1,13 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
-import { Mail, Clock, Loader2, Trash2, Heart, AlertCircle, RefreshCw, Inbox, Eye, Pencil } from 'lucide-react';
-import { apiRequest } from "@/lib/api";
+import { Mail, Clock, Loader2, Trash2, Heart, AlertCircle, RefreshCw, Inbox, Eye, Pencil, Paperclip, X, Upload } from 'lucide-react';
+import { apiRequest, uploadFile, deleteAttachment, listAttachments } from "@/lib/api";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Select } from "@/components/ui/select"
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.txt', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.zip'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILES = 5;
+const MAX_TOTAL_SIZE = 25 * 1024 * 1024;
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
 
 export default function Dashboard() {
     const [messages, setMessages] = useState([]);
@@ -82,6 +93,11 @@ export default function Dashboard() {
     const [editContent, setEditContent] = useState('');
     const [editDuration, setEditDuration] = useState(1440);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
+    const [editAttachments, setEditAttachments] = useState([]);
+    const [editNewFiles, setEditNewFiles] = useState([]);
+    const [showEditAttachments, setShowEditAttachments] = useState(false);
+    const [editAttachLoading, setEditAttachLoading] = useState(false);
+    const editFileInputRef = useRef(null);
 
     const timePresets = [
         { label: '1 Minute (Debug)', value: 1 },
@@ -97,11 +113,69 @@ export default function Dashboard() {
         { label: '1 Year', value: 525600 },
     ];
 
-    const openEditDialog = (message) => {
+    const openEditDialog = async (message) => {
         setEditingMessage(message);
         setEditContent(message.content);
         setEditDuration(message.trigger_duration);
+        setEditNewFiles([]);
         setEditDialogOpen(true);
+        setShowEditAttachments(message.attachment_count > 0);
+        // Load existing attachments
+        try {
+            const atts = await listAttachments(message.id);
+            setEditAttachments(atts || []);
+        } catch {
+            setEditAttachments([]);
+        }
+    };
+
+    const handleDeleteAttachment = async (attachmentId) => {
+        if (!editingMessage) return;
+        setEditAttachLoading(true);
+        try {
+            await deleteAttachment(editingMessage.id, attachmentId);
+            setEditAttachments(prev => prev.filter(a => a.id !== attachmentId));
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setEditAttachLoading(false);
+        }
+    };
+
+    const addEditFiles = (newFiles) => {
+        const fileArray = Array.from(newFiles);
+        const totalCount = editAttachments.length + editNewFiles.length + fileArray.length;
+        if (totalCount > MAX_FILES) {
+            setError(`Maximum ${MAX_FILES} files allowed`);
+            return;
+        }
+
+        const currentSize = editAttachments.reduce((sum, a) => sum + a.size, 0) +
+            editNewFiles.reduce((sum, f) => sum + f.size, 0);
+        const newSize = fileArray.reduce((sum, f) => sum + f.size, 0);
+        if (currentSize + newSize > MAX_TOTAL_SIZE) {
+            setError('Total attachment size exceeds 25 MB limit');
+            return;
+        }
+
+        for (const file of fileArray) {
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            if (!ALLOWED_EXTENSIONS.includes(ext)) {
+                setError(`"${file.name}" — type not allowed`);
+                return;
+            }
+            if (file.size > MAX_FILE_SIZE) {
+                setError(`"${file.name}" exceeds 10 MB limit`);
+                return;
+            }
+        }
+
+        const existingNames = new Set([
+            ...editAttachments.map(a => a.filename),
+            ...editNewFiles.map(f => f.name)
+        ]);
+        const uniqueNew = fileArray.filter(f => !existingNames.has(f.name));
+        setEditNewFiles(prev => [...prev, ...uniqueNew]);
     };
 
     const handleUpdate = async () => {
@@ -116,8 +190,15 @@ export default function Dashboard() {
                     trigger_duration: editDuration
                 })
             });
+
+            // Upload new files
+            for (const file of editNewFiles) {
+                await uploadFile(editingMessage.id, file);
+            }
+
             setEditDialogOpen(false);
             setEditingMessage(null);
+            setEditNewFiles([]);
             await fetchMessages();
         } catch (e) {
             setError(e.message);
@@ -232,8 +313,16 @@ export default function Dashboard() {
                                                 Created {new Date(message.created_at).toLocaleDateString()}
                                             </CardDescription>
                                         </div>
-                                        <div className={`text-[10px] px-2 py-1 rounded-full font-medium ${isTriggered ? 'bg-red-500/10 text-red-400' : 'bg-teal-500/10 text-teal-400'}`}>
-                                            {isTriggered ? 'Triggered' : 'Active'}
+                                        <div className="flex items-center gap-2">
+                                            {message.attachment_count > 0 && (
+                                                <div className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-dark-800 text-dark-300">
+                                                    <Paperclip className="w-3 h-3" />
+                                                    {message.attachment_count}
+                                                </div>
+                                            )}
+                                            <div className={`text-[10px] px-2 py-1 rounded-full font-medium ${isTriggered ? 'bg-red-500/10 text-red-400' : 'bg-teal-500/10 text-teal-400'}`}>
+                                                {isTriggered ? 'Triggered' : 'Active'}
+                                            </div>
                                         </div>
                                     </div>
                                 </CardHeader>
@@ -328,7 +417,7 @@ export default function Dashboard() {
                                         <AlertDialogContent className="bg-dark-900 border-dark-700">
                                             <AlertDialogTitle>Delete Switch?</AlertDialogTitle>
                                             <AlertDialogDescription className="text-dark-400">
-                                                This will permanently delete this switch. The message will not be delivered.
+                                                This will permanently delete this switch and all its attachments. The message will not be delivered.
                                             </AlertDialogDescription>
                                             <div className="flex justify-end gap-2 mt-4">
                                                 <AlertDialogCancel className="bg-dark-800 border-dark-700 text-dark-200 hover:bg-dark-700">Cancel</AlertDialogCancel>
@@ -364,6 +453,112 @@ export default function Dashboard() {
                                 placeholder="Enter your message..."
                             />
                         </div>
+
+                        {/* Attachments Toggle */}
+                        <div className="flex items-center space-x-2 pt-2">
+                            <input
+                                type="checkbox"
+                                id="edit-show-attachments"
+                                checked={showEditAttachments}
+                                onChange={(e) => {
+                                    setShowEditAttachments(e.target.checked);
+                                    if (!e.target.checked) setEditNewFiles([]);
+                                }}
+                                className="h-4 w-4 rounded border-dark-700 bg-dark-950 text-teal-600 focus:ring-teal-500 accent-teal-500"
+                            />
+                            <label htmlFor="edit-show-attachments" className="text-xs font-medium text-dark-300 cursor-pointer">
+                                Send attachments with this switch
+                            </label>
+                        </div>
+
+                        {/* Attachments Section */}
+                        {showEditAttachments && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <label className="text-xs font-medium text-dark-400 flex items-center gap-2">
+                                    <Paperclip className="w-3 h-3" /> Attachments
+                                    <span className="text-dark-600 font-normal">
+                                        ({editAttachments.length + editNewFiles.length}/{MAX_FILES})
+                                    </span>
+                                </label>
+
+                                {/* Existing attachments */}
+                                {editAttachments.length > 0 && (
+                                    <div className="space-y-1.5">
+                                        {editAttachments.map(att => (
+                                            <div
+                                                key={att.id}
+                                                className="flex items-center justify-between bg-dark-950 border border-dark-700 rounded-lg px-3 py-2"
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <Paperclip className="w-3 h-3 text-teal-400 shrink-0" />
+                                                    <span className="text-xs text-dark-200 truncate">{att.filename}</span>
+                                                    <span className="text-[10px] text-dark-500 shrink-0">{formatFileSize(att.size)}</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleDeleteAttachment(att.id)}
+                                                    disabled={editAttachLoading}
+                                                    className="text-dark-500 hover:text-red-400 transition-colors p-0.5"
+                                                >
+                                                    {editAttachLoading ? (
+                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                    ) : (
+                                                        <X className="w-3.5 h-3.5" />
+                                                    )}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* New files to upload */}
+                                {editNewFiles.length > 0 && (
+                                    <div className="space-y-1.5">
+                                        {editNewFiles.map((file, index) => (
+                                            <div
+                                                key={`new-${file.name}-${index}`}
+                                                className="flex items-center justify-between bg-teal-500/5 border border-teal-500/20 rounded-lg px-3 py-2"
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <Upload className="w-3 h-3 text-teal-400 shrink-0" />
+                                                    <span className="text-xs text-dark-200 truncate">{file.name}</span>
+                                                    <span className="text-[10px] text-teal-400 shrink-0">new</span>
+                                                    <span className="text-[10px] text-dark-500 shrink-0">{formatFileSize(file.size)}</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => setEditNewFiles(prev => prev.filter((_, i) => i !== index))}
+                                                    className="text-dark-500 hover:text-red-400 transition-colors p-0.5"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Add more files */}
+                                {(editAttachments.length + editNewFiles.length) < MAX_FILES && (
+                                    <button
+                                        onClick={() => editFileInputRef.current?.click()}
+                                        className="w-full border border-dashed border-dark-700 hover:border-dark-500 rounded-lg p-3 text-center transition-colors"
+                                    >
+                                        <input
+                                            ref={editFileInputRef}
+                                            type="file"
+                                            multiple
+                                            className="hidden"
+                                            accept={ALLOWED_EXTENSIONS.join(',')}
+                                            onChange={(e) => {
+                                                if (e.target.files?.length) addEditFiles(e.target.files);
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                        <Upload className="w-4 h-4 text-dark-500 mx-auto mb-1" />
+                                        <p className="text-[10px] text-dark-500">Add files</p>
+                                    </button>
+                                )}
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             <label className="text-xs font-medium text-dark-400 flex items-center gap-2">
                                 <Clock className="w-3 h-3" /> Trigger After

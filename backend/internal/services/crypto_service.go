@@ -134,6 +134,74 @@ func (s CryptoService) Decrypt(encoded string) (string, error) {
 	return string(plaintext), nil
 }
 
+// EncryptBytes encrypts raw binary data and returns the ciphertext as bytes (nonce prepended)
+func (s CryptoService) EncryptBytes(plaintext []byte) ([]byte, error) {
+	keyBase64, err := s.getOrCreateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := base64.StdEncoding.DecodeString(keyBase64)
+	if err != nil {
+		return nil, Internal("Invalid encryption key", err)
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, Internal("Failed to create cipher", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, Internal("Failed to create GCM", err)
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, Internal("Failed to generate nonce", err)
+	}
+
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	return ciphertext, nil
+}
+
+// DecryptBytes decrypts raw binary ciphertext (nonce prepended) and returns the plaintext bytes
+func (s CryptoService) DecryptBytes(ciphertext []byte) ([]byte, error) {
+	keyBase64, err := s.getOrCreateKey()
+	if err != nil {
+		return nil, err
+	}
+
+	key, err := base64.StdEncoding.DecodeString(keyBase64)
+	if err != nil {
+		return nil, Internal("Invalid encryption key", err)
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, Internal("Failed to create cipher", err)
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, Internal("Failed to create GCM", err)
+	}
+
+	if len(ciphertext) < gcm.NonceSize() {
+		return nil, Internal("Invalid ciphertext length", nil)
+	}
+
+	nonce := ciphertext[:gcm.NonceSize()]
+	data := ciphertext[gcm.NonceSize():]
+
+	plaintext, err := gcm.Open(nil, nonce, data, nil)
+	if err != nil {
+		return nil, Internal("Failed to decrypt data", err)
+	}
+
+	return plaintext, nil
+}
+
 func (s CryptoService) EncryptIfNeeded(plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil

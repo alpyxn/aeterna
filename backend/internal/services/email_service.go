@@ -1,9 +1,12 @@
 package services
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"mime"
 	"net/smtp"
 	"strings"
 	"time"
@@ -12,6 +15,13 @@ import (
 )
 
 type EmailService struct{}
+
+// EmailAttachment represents a file to be attached to an email
+type EmailAttachment struct {
+	Filename string
+	MimeType string
+	Data     []byte
+}
 
 var emailCryptoService = CryptoService{}
 
@@ -22,7 +32,7 @@ func sanitizeEmailHeader(s string) string {
 	return s
 }
 
-func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.Message) error {
+func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.Message, attachments []EmailAttachment) error {
 	to := msg.RecipientEmail
 	subject := "A message for you"
 
@@ -44,7 +54,86 @@ func (s EmailService) SendTriggeredMessage(settings models.Settings, msg models.
 
 Sent by Aeterna`, content)
 
+	if len(attachments) > 0 {
+		return s.SendWithAttachments(settings, to, subject, body, attachments)
+	}
 	return s.SendPlain(settings, to, subject, body)
+}
+
+// SendWithAttachments sends an email with file attachments using MIME multipart/mixed
+func (s EmailService) SendWithAttachments(settings models.Settings, to, subject, textBody string, attachments []EmailAttachment) error {
+	from := settings.SMTPFrom
+	if from == "" {
+		from = settings.SMTPUser
+	}
+	fromName := settings.SMTPFromName
+	if fromName == "" {
+		fromName = "Aeterna"
+	}
+
+	// Sanitize headers
+	from = sanitizeEmailHeader(from)
+	fromName = sanitizeEmailHeader(fromName)
+	to = sanitizeEmailHeader(to)
+	subject = sanitizeEmailHeader(subject)
+
+	boundary := "==AeternaBoundary=="
+
+	var buf bytes.Buffer
+
+	// Main headers
+	buf.WriteString(fmt.Sprintf("From: %s <%s>\r\n", fromName, from))
+	buf.WriteString(fmt.Sprintf("To: %s\r\n", to))
+	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	buf.WriteString("MIME-Version: 1.0\r\n")
+	buf.WriteString(fmt.Sprintf("Content-Type: multipart/mixed; boundary=\"%s\"\r\n", boundary))
+	buf.WriteString("\r\n")
+
+	// Text body part
+	buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	buf.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	buf.WriteString("Content-Transfer-Encoding: 7bit\r\n")
+	buf.WriteString("\r\n")
+	buf.WriteString(textBody)
+	buf.WriteString("\r\n")
+
+	// Attachment parts
+	for _, att := range attachments {
+		buf.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+		buf.WriteString(fmt.Sprintf("Content-Type: %s; name=\"%s\"\r\n",
+			att.MimeType,
+			mime.QEncoding.Encode("utf-8", att.Filename)))
+		buf.WriteString("Content-Transfer-Encoding: base64\r\n")
+		buf.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=\"%s\"\r\n",
+			mime.QEncoding.Encode("utf-8", att.Filename)))
+		buf.WriteString("\r\n")
+
+		// Encode file data as base64 with line wrapping (76 chars per line per RFC 2045)
+		encoded := base64.StdEncoding.EncodeToString(att.Data)
+		for i := 0; i < len(encoded); i += 76 {
+			end := i + 76
+			if end > len(encoded) {
+				end = len(encoded)
+			}
+			buf.WriteString(encoded[i:end])
+			buf.WriteString("\r\n")
+		}
+	}
+
+	// Closing boundary
+	buf.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+
+	message := buf.Bytes()
+	addr := settings.SMTPHost + ":" + settings.SMTPPort
+
+	if settings.SMTPPort == "465" {
+		return s.sendWithRetry(func() error {
+			return s.sendEmailSSL(settings, addr, from, to, message)
+		})
+	}
+	return s.sendWithRetry(func() error {
+		return s.sendEmailSTARTTLS(settings, addr, from, to, message)
+	})
 }
 
 // SendPlain sends a plain text email

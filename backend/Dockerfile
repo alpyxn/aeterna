@@ -20,6 +20,7 @@ RUN apk add --no-cache sqlite
 
 WORKDIR /app
 COPY --from=builder /app/main .
+RUN mkdir -p /app/data/uploads
 
 EXPOSE 3000
 
