@@ -33,7 +33,7 @@ Aeterna holds these words. It watches. It waits. And when the time comes, it del
 - **Privacy-Focused Architecture**: Messages and attachments are encrypted at rest (AES-256-GCM) on your private server, ensuring they are only decrypted at the moment of delivery.
 
 <p align="center">
-  <img src="assets/screenshots/dashboard.png" alt="Aeterna Dashboard" width="800">
+  <img src="assets/screenshots/dashboard.png" alt="Aeterna Dashboard">
   <br>
   <em>User Dashboard - Manage your switches and check-in status.</em>
 </p>
@@ -80,7 +80,7 @@ The installer guides you through basic configuration:
 **SMTP Settings** (required for sending emails) are configured post-installation through the application's **Settings** menu. This allows for live testing and easier management.
 
 <p align="center">
-  <img src="assets/screenshots/settings.png" alt="Aeterna Settings" width="800">
+  <img src="assets/screenshots/settings.png" alt="Aeterna Settings">
   <br>
   <em>SMTP and Webhook Configuration</em>
 </p>
