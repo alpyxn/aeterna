@@ -173,7 +173,6 @@ func (s EmailService) SendPlain(settings models.Settings, to, subject, body stri
 	})
 }
 
-
 func (s EmailService) sendWithRetry(sendFn func() error) error {
 	const maxAttempts = 3
 	baseDelay := 500 * time.Millisecond
@@ -310,4 +309,3 @@ func (a *emailLoginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 	}
 	return nil, nil
 }
-

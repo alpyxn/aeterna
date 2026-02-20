@@ -32,17 +32,17 @@ func MasterAuth(c *fiber.Ctx) error {
 func enforceOriginAllowlist(c *fiber.Ctx) error {
 	origin := strings.TrimSpace(c.Get("Origin"))
 	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
-	
+
 	// Debug logging (only in non-production)
 	if os.Getenv("ENV") != "production" {
 		slog.Info("Origin check", "origin", origin, "allowed", allowedOrigins, "referer", c.Get("Referer"))
 	}
-	
+
 	// Support wildcard for simple/testing mode - check first!
 	if allowedOrigins == "*" {
 		return nil
 	}
-	
+
 	// Same-origin requests may not send Origin header
 	// In that case, check Referer or allow the request
 	if origin == "" {
@@ -54,7 +54,7 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 			}
 		}
 	}
-	
+
 	// If still no origin (same-origin fetch, curl, etc.), allow in development
 	if origin == "" {
 		env := os.Getenv("ENV")
@@ -78,7 +78,7 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 	if allowedOrigins == "" {
 		allowedOrigins = "http://localhost:5173"
 	}
-	
+
 	for _, entry := range strings.Split(allowedOrigins, ",") {
 		if strings.TrimSpace(entry) == origin {
 			return nil
@@ -91,4 +91,3 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 		"code":  "origin_not_allowed",
 	})
 }
-

@@ -8,8 +8,8 @@ import (
 )
 
 type loginAttempt struct {
-	Count     int
-	LastTry   time.Time
+	Count       int
+	LastTry     time.Time
 	LockedUntil time.Time
 }
 
@@ -28,9 +28,9 @@ const (
 // AuthRateLimiter provides brute-force protection for authentication endpoints
 func AuthRateLimiter(c *fiber.Ctx) error {
 	ip := c.IP()
-	
+
 	loginMutex.Lock()
-	
+
 	attempt, exists := loginAttempts[ip]
 	now := time.Now()
 

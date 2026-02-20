@@ -233,4 +233,3 @@ func (s CryptoService) GenerateToken(length int) (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(buf), nil
 }
-

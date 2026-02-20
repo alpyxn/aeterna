@@ -13,12 +13,12 @@ import (
 	"github.com/alpyxn/aeterna/backend/internal/models"
 	"github.com/alpyxn/aeterna/backend/internal/services"
 	"github.com/alpyxn/aeterna/backend/internal/worker"
-	"github.com/google/uuid"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -59,7 +59,7 @@ func main() {
 	}
 	// Initialize Database
 	database.Connect()
-	
+
 	// Auto Migrate - GORM handles schema creation and updates for SQLite
 	// SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS, so we rely on AutoMigrate
 	if err := database.DB.AutoMigrate(&models.Message{}, &models.Settings{}, &models.Webhook{}, &models.Attachment{}); err != nil {
@@ -68,10 +68,10 @@ func main() {
 
 	// SQLite migration: Update existing records with default values if needed
 	// These are safe operations that work with SQLite
-	
+
 	// Ensure key_fragment has default value for existing records
 	database.DB.Exec("UPDATE messages SET key_fragment = 'local' WHERE key_fragment IS NULL OR key_fragment = '';")
-	
+
 	// Ensure management_token is set for existing records (BeforeCreate hook handles new ones)
 	// For SQLite, we need to update in Go since SQLite doesn't have uuid generation
 	var messagesWithoutToken []models.Message
@@ -80,13 +80,13 @@ func main() {
 		messagesWithoutToken[i].ManagementToken = uuid.NewString()
 		database.DB.Save(&messagesWithoutToken[i])
 	}
-	
+
 	// Ensure encrypted_content is not null for existing records
 	database.DB.Exec("UPDATE messages SET encrypted_content = '' WHERE encrypted_content IS NULL;")
-	
+
 	// Ensure webhook_enabled has default value
 	database.DB.Exec("UPDATE settings SET webhook_enabled = 0 WHERE webhook_enabled IS NULL;")
-	
+
 	// Ensure reminder_sent has default value
 	database.DB.Exec("UPDATE messages SET reminder_sent = 0 WHERE reminder_sent IS NULL;")
 
@@ -104,15 +104,15 @@ func main() {
 	app.Use(logger.New(logger.Config{
 		Format: "{\"time\":\"${time}\",\"ip\":\"${ip}\",\"status\":${status},\"method\":\"${method}\",\"path\":\"${path}\",\"latency\":\"${latency}\",\"req_id\":\"${locals:requestid}\"}\n",
 	}))
-	
+
 	// Security headers middleware
 	app.Use(middleware.SecurityHeaders)
-	
+
 	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
 		allowedOrigins = "http://localhost:5173"
 	}
-	
+
 	// For simple mode (ALLOWED_ORIGINS=*), use dynamic origin to avoid Fiber CORS panic
 	if allowedOrigins == "*" {
 		app.Use(cors.New(cors.Config{
@@ -148,12 +148,12 @@ func main() {
 
 	// Routes
 	api := app.Group("/api")
-	
+
 	// Public Reveal
 	api.Get("/messages/:id", handlers.GetMessage)
 	api.Get("/setup/status", handlers.SetupStatus)
 	api.Post("/setup", handlers.SetupMasterPassword)
-	
+
 	// Auth endpoints with brute-force protection
 	api.Post("/auth/verify", middleware.AuthRateLimiter, handlers.VerifyMasterPassword)
 	api.Get("/auth/session", handlers.SessionStatus)
@@ -178,7 +178,7 @@ func main() {
 	mgmt.Post("/webhooks", handlers.CreateWebhook)
 	mgmt.Put("/webhooks/:id", handlers.UpdateWebhook)
 	mgmt.Delete("/webhooks/:id", handlers.DeleteWebhook)
-	
+
 	// Settings
 	mgmt.Get("/settings", handlers.GetSettings)
 	mgmt.Post("/settings", handlers.SaveSettings)

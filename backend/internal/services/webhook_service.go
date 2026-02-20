@@ -16,14 +16,14 @@ import (
 type WebhookService struct{}
 
 type triggerPayload struct {
-	Event          string    `json:"event"`
-	MessageID      string    `json:"message_id"`
-	RecipientEmail string    `json:"recipient_email"`
-	Content        string    `json:"content"`
-	TriggerDuration int      `json:"trigger_duration"`
-	LastSeen       time.Time `json:"last_seen"`
-	Status         string    `json:"status"`
-	CreatedAt      time.Time `json:"created_at"`
+	Event           string    `json:"event"`
+	MessageID       string    `json:"message_id"`
+	RecipientEmail  string    `json:"recipient_email"`
+	Content         string    `json:"content"`
+	TriggerDuration int       `json:"trigger_duration"`
+	LastSeen        time.Time `json:"last_seen"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func (s WebhookService) SendTriggerWebhooks(webhooks []models.Webhook, msg models.Message) error {

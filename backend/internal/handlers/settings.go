@@ -8,7 +8,6 @@ import (
 
 // settingsService is defined in heartbeat.go
 
-
 func GetSettings(c *fiber.Ctx) error {
 	settings, err := settingsService.Get()
 	if err != nil {
@@ -38,4 +37,3 @@ func TestSMTP(c *fiber.Ctx) error {
 	}
 	return c.JSON(fiber.Map{"success": true, "message": "Connection successful"})
 }
-

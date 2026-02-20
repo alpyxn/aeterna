@@ -34,14 +34,14 @@ func checkReminders() {
 	}
 
 	var messages []models.Message
-	
+
 	// Find active messages where 50% of time has passed and reminder not sent
 	// last_seen + (trigger_duration * 0.5 minutes) < now AND reminder_sent = false
 	err = database.DB.Where(
 		"status = ? AND reminder_sent = ? AND datetime(last_seen, '+' || CAST(CAST(trigger_duration * 0.5 AS INTEGER) AS TEXT) || ' minutes') < datetime('now')",
 		models.StatusActive, false,
 	).Find(&messages).Error
-	
+
 	if err != nil {
 		slog.Error("Error checking reminders", "error", err)
 		return
@@ -99,7 +99,7 @@ Sent by Aeterna`, remainingStr, msg.RecipientEmail, quickLink)
 
 func checkHeartbeats() {
 	var messages []models.Message
-	
+
 	// Find active messages where last_seen + trigger_duration < now
 	err := database.DB.Where(
 		"status = ? AND datetime(last_seen, '+' || CAST(trigger_duration AS TEXT) || ' minutes') < datetime('now')",
@@ -117,7 +117,7 @@ func checkHeartbeats() {
 
 func triggerSwitch(msg models.Message) {
 	slog.Warn("Switch triggered", "recipient", msg.RecipientEmail, "id", msg.ID)
-	
+
 	// Load file attachments
 	var emailAttachments []services.EmailAttachment
 	attachments, err := workerFileService.ListByMessageID(msg.ID)
@@ -210,4 +210,3 @@ Sent by Aeterna`, msg.RecipientEmail, webhookInfo)
 		slog.Info("Owner notified of delivery", "owner", settings.OwnerEmail, "recipient", msg.RecipientEmail)
 	}
 }
-

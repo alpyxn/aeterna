@@ -151,7 +151,6 @@ func (s AuthService) SetMasterPassword(password string, ownerEmail string) error
 	return nil
 }
 
-
 func (s AuthService) VerifyMasterPassword(password string) error {
 	if password == "" {
 		return BadRequest("Master password is required", nil)
