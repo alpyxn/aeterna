@@ -58,6 +58,7 @@ DIM='\033[2m'
 
 # Script version
 VERSION="1.3.0"
+BRANCH="feat/recovery-key" # Branch to checkout during installation
 
 # Default values
 PROXY_MODE=""  # nginx or simple
@@ -419,6 +420,8 @@ prompt() {
 prompt_yn() {
     local prompt_text=$1
     local default=$2
+BRANCH="main" # Branch to checkout during installation
+
     local result
     
     if [ "$default" = "y" ]; then
@@ -679,7 +682,7 @@ setup_repository() {
         if prompt_yn "Update existing installation?" "n"; then
             cd "$INSTALL_DIR"
             git fetch origin
-            git pull origin main
+            git pull origin "$BRANCH"
             success "Repository updated"
         else
             error "Installation cancelled. Remove existing directory first: rm -rf $INSTALL_DIR"
@@ -687,7 +690,7 @@ setup_repository() {
     else
         sudo mkdir -p "$INSTALL_DIR"
         sudo chown "$USER":"$USER" "$INSTALL_DIR"
-        git clone https://github.com/alpyxn/aeterna.git "$INSTALL_DIR"
+        git clone -b "$BRANCH" https://github.com/alpyxn/aeterna.git "$INSTALL_DIR"
         success "Repository cloned"
     fi
     
@@ -1409,7 +1412,7 @@ update_installation() {
     cd "$install_path"
     
     git fetch origin
-    git pull origin main
+    git pull origin "$BRANCH"
     
     # Ensure secrets directory exists (for encryption key)
     if ! mkdir -p "$install_path/secrets" 2>/dev/null; then
