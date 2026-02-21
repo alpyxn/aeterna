@@ -40,6 +40,41 @@ cd aeterna
 ./install.sh
 ```
 
+### Manual Installation (Docker)
+
+If you prefer not to use the installation script, you can install Aeterna manually using Docker Compose:
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/alpyxn/aeterna.git
+   cd aeterna
+   ```
+
+2. **Generate encryption key:**
+   ```bash
+   mkdir -p secrets
+   openssl rand -base64 32 | tr -d '\n' > secrets/encryption_key
+   chmod 600 secrets/encryption_key
+   ```
+
+3. **Configure environment:**
+   Create a `.env` file based on your environment.
+   ```bash
+   cp .env.production.example .env
+   # Edit .env and configure your DOMAIN, etc.
+   nano .env
+   ```
+
+4. **Start the services:**
+   *For production (requires existing Nginx setup or handles its own via `docker-compose.nginx.yml`):*
+   ```bash
+   docker compose -f docker-compose.nginx.yml up -d
+   ```
+   *For testing/development (no SSL):*
+   ```bash
+   docker compose -f docker-compose.simple.yml up -d
+   ```
+
 ### Installation Modes
 
 During installation, you will be prompted to choose a mode:

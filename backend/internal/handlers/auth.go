@@ -37,13 +37,39 @@ func SetupMasterPassword(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
-	if err := authService.SetMasterPassword(req.Password, req.OwnerEmail); err != nil {
+	recoveryKey, err := authService.SetMasterPassword(req.Password, req.OwnerEmail)
+	if err != nil {
 		return writeError(c, err)
 	}
 	if err := issueSessionCookie(c); err != nil {
 		return writeError(c, err)
 	}
-	return c.JSON(fiber.Map{"success": true})
+	return c.JSON(fiber.Map{"success": true, "recovery_key": recoveryKey})
+}
+
+func ResetMasterPassword(c *fiber.Ctx) error {
+	var req struct {
+		RecoveryKey string `json:"recovery_key"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := c.BodyParser(&req); err != nil {
+		return writeError(c, services.BadRequest("Invalid request body", err))
+	}
+
+	newRecoveryKey, err := authService.ResetMasterPassword(req.RecoveryKey, req.NewPassword)
+	if err != nil {
+		// Record failed attempt for rate limiting
+		middleware.RecordFailedLogin(c.IP())
+		return writeError(c, err)
+	}
+	// Record successful usage to reset rate limit counter
+	middleware.RecordSuccessfulLogin(c.IP())
+
+	if err := issueSessionCookie(c); err != nil {
+		return writeError(c, err)
+	}
+
+	return c.JSON(fiber.Map{"success": true, "recovery_key": newRecoveryKey})
 }
 
 func VerifyMasterPassword(c *fiber.Ctx) error {

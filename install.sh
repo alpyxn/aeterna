@@ -58,6 +58,7 @@ DIM='\033[2m'
 
 # Script version
 VERSION="1.3.0"
+BRANCH="main" # Branch to checkout during installation
 
 # Default values
 PROXY_MODE=""  # nginx or simple
@@ -238,6 +239,15 @@ check_port() {
     return 1
 }
 
+# Find a free port starting from a given port
+find_free_port() {
+    local port=$1
+    while check_port "$port"; do
+        port=$((port + 1))
+    done
+    echo "$port"
+}
+
 # Check system requirements
 check_requirements() {
     echo ""
@@ -343,19 +353,11 @@ check_requirements() {
     
     case "$PROXY_MODE" in
         nginx)
-            if check_port 8080; then
-                warning "Port 8080 is in use (needed for backend)"
-                requirements_met=false
-            else
-                success "Port 8080 is available (backend)"
-            fi
+            BACKEND_PORT=$(find_free_port 8080)
+            success "Port $BACKEND_PORT is available (backend)"
             
-            if check_port 8081; then
-                warning "Port 8081 is in use (needed for frontend)"
-                requirements_met=false
-            else
-                success "Port 8081 is available (frontend)"
-            fi
+            FRONTEND_PORT=$(find_free_port $((BACKEND_PORT + 1)))
+            success "Port $FRONTEND_PORT is available (frontend)"
             ;;
         simple)
             if check_port 5000; then
@@ -419,6 +421,7 @@ prompt() {
 prompt_yn() {
     local prompt_text=$1
     local default=$2
+
     local result
     
     if [ "$default" = "y" ]; then
@@ -529,7 +532,7 @@ select_proxy_mode() {
     echo -e "  ${CYAN}1)${NC} ${BOLD}nginx + SSL${NC} (recommended)"
     echo -e "     ${DIM}• Automatic nginx + certbot SSL setup${NC}"
     echo -e "     ${DIM}• Requires a domain name${NC}"
-    echo -e "     ${DIM}• Uses ports 80, 443, 8080, 8081${NC}"
+    echo -e "     ${DIM}• Dynamically assigns internal ports${NC}"
     echo ""
     echo -e "  ${CYAN}2)${NC} ${BOLD}Simple${NC} - IP only, no SSL (testing/dev)"
     echo -e "     ${DIM}• No domain required, access via IP${NC}"
@@ -679,7 +682,7 @@ setup_repository() {
         if prompt_yn "Update existing installation?" "n"; then
             cd "$INSTALL_DIR"
             git fetch origin
-            git pull origin main
+            git pull origin "$BRANCH"
             success "Repository updated"
         else
             error "Installation cancelled. Remove existing directory first: rm -rf $INSTALL_DIR"
@@ -687,7 +690,7 @@ setup_repository() {
     else
         sudo mkdir -p "$INSTALL_DIR"
         sudo chown "$USER":"$USER" "$INSTALL_DIR"
-        git clone https://github.com/alpyxn/aeterna.git "$INSTALL_DIR"
+        git clone -b "$BRANCH" https://github.com/alpyxn/aeterna.git "$INSTALL_DIR"
         success "Repository cloned"
     fi
     
@@ -893,6 +896,10 @@ VITE_API_URL=/api
 
 # Installation Mode
 PROXY_MODE=$PROXY_MODE
+
+# Internal Ports
+BACKEND_PORT=${BACKEND_PORT:-8080}
+FRONTEND_PORT=${FRONTEND_PORT:-8081}
 EOF
 
     # Set permissions before moving
@@ -931,7 +938,7 @@ server {
 
     # API Backend
     location /api {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:${BACKEND_PORT:-8080};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -944,7 +951,7 @@ server {
 
     # Frontend
     location / {
-        proxy_pass http://127.0.0.1:8081;
+        proxy_pass http://127.0.0.1:${FRONTEND_PORT:-8081};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -1122,13 +1129,13 @@ start_application() {
     local backend_healthy=false
     
     # Determine how to reach the backend
-    # - nginx: backend is on localhost:8080
+    # - nginx: backend is on localhost:$BACKEND_PORT
     # - simple: backend is behind proxy on localhost:5000
     local health_check_url=""
     case "$PROXY_MODE" in
-        nginx)   health_check_url="http://localhost:8080/api/setup/status" ;;
+        nginx)   health_check_url="http://localhost:${BACKEND_PORT:-8080}/api/setup/status" ;;
         simple)  health_check_url="http://localhost:5000/api/setup/status" ;;
-        *)       health_check_url="http://localhost:8080/api/setup/status" ;;
+        *)       health_check_url="http://localhost:${BACKEND_PORT:-8080}/api/setup/status" ;;
     esac
     
     while [ $health_attempts -lt $max_health_attempts ]; do
@@ -1185,7 +1192,7 @@ wait_for_services() {
     local check_url="http://localhost"
     
     case "$PROXY_MODE" in
-        nginx) check_url="http://localhost:8081" ;;
+        nginx) check_url="http://localhost:${FRONTEND_PORT:-8081}" ;;
         simple) check_url="http://localhost:5000" ;;
     esac
     
@@ -1409,7 +1416,7 @@ update_installation() {
     cd "$install_path"
     
     git fetch origin
-    git pull origin main
+    git pull origin "$BRANCH"
     
     # Ensure secrets directory exists (for encryption key)
     if ! mkdir -p "$install_path/secrets" 2>/dev/null; then

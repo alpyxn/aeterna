@@ -10,6 +10,7 @@ type Settings struct {
 	SMTPFrom           string `gorm:"column:smtp_from" json:"smtp_from"`
 	SMTPFromName       string `gorm:"column:smtp_from_name" json:"smtp_from_name"`
 	MasterPasswordHash string `gorm:"column:master_password_hash" json:"-"`
+	RecoveryKeyHash    string `gorm:"column:recovery_key_hash" json:"-"`
 	WebhookURL         string `gorm:"column:webhook_url" json:"webhook_url"`
 	WebhookSecret      string `gorm:"column:webhook_secret" json:"-"` // Hidden from API responses
 	WebhookEnabled     bool   `gorm:"column:webhook_enabled;default:0" json:"webhook_enabled"`
