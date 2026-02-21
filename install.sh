@@ -58,7 +58,7 @@ DIM='\033[2m'
 
 # Script version
 VERSION="1.3.0"
-BRANCH="feat/recovery-key" # Branch to checkout during installation
+BRANCH="main" # Branch to checkout during installation
 
 # Default values
 PROXY_MODE=""  # nginx or simple
