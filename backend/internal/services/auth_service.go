@@ -1,11 +1,15 @@
 package services
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/alpyxn/aeterna/backend/internal/database"
@@ -102,26 +106,45 @@ func (s AuthService) GetMasterHash() (string, error) {
 
 var validationService = ValidationService{}
 
-func (s AuthService) SetMasterPassword(password string, ownerEmail string) error {
+func generateRecoveryKey() (string, error) {
+	bytes := make([]byte, 10) // 20 hex characters
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	hexStr := strings.ToUpper(hex.EncodeToString(bytes))
+	return fmt.Sprintf("RK-%s-%s-%s-%s", hexStr[0:5], hexStr[5:10], hexStr[10:15], hexStr[15:20]), nil
+}
+
+func (s AuthService) SetMasterPassword(password string, ownerEmail string) (string, error) {
 	if err := validationService.ValidatePassword(password); err != nil {
-		return err
+		return "", err
 	}
 
 	if ownerEmail != "" {
 		if err := validationService.ValidateEmail(ownerEmail); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return Internal("Failed to hash master password", err)
+		return "", Internal("Failed to hash master password", err)
+	}
+
+	recoveryKey, err := generateRecoveryKey()
+	if err != nil {
+		return "", Internal("Failed to generate recovery key", err)
+	}
+
+	recoveryHash, err := bcrypt.GenerateFromPassword([]byte(recoveryKey), bcrypt.DefaultCost)
+	if err != nil {
+		return "", Internal("Failed to hash recovery key", err)
 	}
 
 	// Generate heartbeat token
 	heartbeatToken, err := cryptoService.GenerateToken(32)
 	if err != nil {
-		return Internal("Failed to generate heartbeat token", err)
+		return "", Internal("Failed to generate heartbeat token", err)
 	}
 
 	var settings models.Settings
@@ -131,24 +154,70 @@ func (s AuthService) SetMasterPassword(password string, ownerEmail string) error
 			settings = models.Settings{
 				ID:                 1,
 				MasterPasswordHash: string(hash),
+				RecoveryKeyHash:    string(recoveryHash),
 				OwnerEmail:         ownerEmail,
 				HeartbeatToken:     heartbeatToken,
 			}
 			if err := database.DB.Create(&settings).Error; err != nil {
-				return Internal("Failed to save master password", err)
+				return "", Internal("Failed to save master password", err)
 			}
-			return nil
+			return recoveryKey, nil
 		}
-		return Internal("Failed to fetch settings", result.Error)
+		return "", Internal("Failed to fetch settings", result.Error)
 	}
 
 	settings.MasterPasswordHash = string(hash)
+	settings.RecoveryKeyHash = string(recoveryHash)
 	settings.OwnerEmail = ownerEmail
 	settings.HeartbeatToken = heartbeatToken
 	if err := database.DB.Save(&settings).Error; err != nil {
-		return Internal("Failed to save master password", err)
+		return "", Internal("Failed to save master password", err)
 	}
-	return nil
+	return recoveryKey, nil
+}
+
+func (s AuthService) ResetMasterPassword(recoveryKey string, newPassword string) (string, error) {
+	if err := validationService.ValidatePassword(newPassword); err != nil {
+		return "", err
+	}
+
+	var settings models.Settings
+	result := database.DB.First(&settings)
+	if result.Error != nil {
+		return "", Internal("Failed to fetch settings", result.Error)
+	}
+
+	if settings.RecoveryKeyHash == "" {
+		return "", BadRequest("Recovery key not configured for this account", nil)
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(settings.RecoveryKeyHash), []byte(recoveryKey)); err != nil {
+		return "", NewAPIError(401, "unauthorized", "Invalid recovery key.", err)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return "", Internal("Failed to hash new master password", err)
+	}
+
+	newRecoveryKey, err := generateRecoveryKey()
+	if err != nil {
+		return "", Internal("Failed to generate new recovery key", err)
+	}
+
+	newRecoveryHash, err := bcrypt.GenerateFromPassword([]byte(newRecoveryKey), bcrypt.DefaultCost)
+	if err != nil {
+		return "", Internal("Failed to hash new recovery key", err)
+	}
+
+	settings.MasterPasswordHash = string(hash)
+	settings.RecoveryKeyHash = string(newRecoveryHash)
+
+	if err := database.DB.Save(&settings).Error; err != nil {
+		return "", Internal("Failed to update password and recovery key", err)
+	}
+
+	return newRecoveryKey, nil
 }
 
 func (s AuthService) VerifyMasterPassword(password string) error {

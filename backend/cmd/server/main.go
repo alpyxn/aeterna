@@ -156,6 +156,7 @@ func main() {
 
 	// Auth endpoints with brute-force protection
 	api.Post("/auth/verify", middleware.AuthRateLimiter, handlers.VerifyMasterPassword)
+	api.Post("/auth/reset-password", middleware.AuthRateLimiter, handlers.ResetMasterPassword)
 	api.Get("/auth/session", handlers.SessionStatus)
 	api.Post("/auth/logout", handlers.Logout)
 
