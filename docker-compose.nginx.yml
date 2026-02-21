@@ -1,6 +1,6 @@
 # Aeterna - Docker Compose for nginx reverse proxy mode
 # Use this when you have an existing nginx installation
-# Exposes backend on port 8080 and frontend on port 8081
+# Exposes backend and frontend on dynamically assigned ports
 
 services:
   backend:
@@ -28,7 +28,7 @@ services:
     volumes:
       - ./data:/app/data
     ports:
-      - "127.0.0.1:8080:3000"
+      - "127.0.0.1:${BACKEND_PORT:-8080}:3000"
     restart: always
     networks:
       - aeterna-net
@@ -40,7 +40,7 @@ services:
       args:
         - VITE_API_URL=/api
     ports:
-      - "127.0.0.1:8081:80"
+      - "127.0.0.1:${FRONTEND_PORT:-8081}:80"
     depends_on:
       - backend
     restart: always
