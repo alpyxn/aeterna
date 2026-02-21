@@ -420,7 +420,6 @@ prompt() {
 prompt_yn() {
     local prompt_text=$1
     local default=$2
-BRANCH="main" # Branch to checkout during installation
 
     local result
     
