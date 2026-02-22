@@ -83,7 +83,8 @@ export default function Settings() {
         smtp_user: '',
         smtp_pass: '',
         smtp_from: '',
-        smtp_from_name: 'Aeterna'
+        smtp_from_name: 'Aeterna',
+        owner_email: ''
     });
     const [configLoading, setConfigLoading] = useState(true);
     const [loading, setLoading] = useState(false);
@@ -280,6 +281,66 @@ export default function Settings() {
                         ))}
                     </div>
                 )}
+            </Card>
+
+            {/* Owner Email / System Notifications */}
+            <Card className="border-teal-500/20 bg-dark-900 shadow-[0_0_15px_rgba(45,212,191,0.05)]">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base font-medium text-teal-400">
+                        <Mail className="w-4 h-4" />
+                        System Notifications
+                    </CardTitle>
+                    <CardDescription className="text-dark-400">
+                        The secure address where you will receive your check-in links, status updates, and system alerts.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
+                            Owner Email Address
+                        </label>
+                        <Input
+                            placeholder="admin@yourdomain.com"
+                            value={config.owner_email || ''}
+                            onChange={(e) => {
+                                setConfig({ ...config, owner_email: e.target.value });
+                                if (error) setError(null);
+                                if (saved) setSaved(false);
+                            }}
+                            className="bg-dark-950 border-dark-700 text-dark-100 placeholder:text-dark-500 focus-visible:ring-teal-500/50"
+                            aria-invalid={Boolean(error)}
+                        />
+                    </div>
+
+                    {saved && (
+                        <Alert className="mt-4 border-green-500/30 bg-green-500/10">
+                            <CheckCircle className="h-4 w-4 text-green-400" />
+                            <AlertDescription className="text-green-400">
+                                Email address saved successfully!
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                    {error && (
+                        <Alert variant="destructive" className="mt-4">
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+                <CardFooter className="flex justify-end pt-2 border-t border-dark-800/40">
+                    <Button
+                        size="sm"
+                        className="bg-teal-600 hover:bg-teal-500 text-xs"
+                        onClick={handleSave}
+                        disabled={loading || configLoading}
+                    >
+                        {loading ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                        ) : (
+                            <Save className="w-3.5 h-3.5 mr-1.5" />
+                        )}
+                        Save Email
+                    </Button>
+                </CardFooter>
             </Card>
 
             <Card className="glowing-card">
