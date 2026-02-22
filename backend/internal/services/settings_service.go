@@ -93,6 +93,7 @@ func (s SettingsService) Save(req models.Settings) error {
 		existing.WebhookSecret = req.WebhookSecret
 	}
 	existing.WebhookEnabled = req.WebhookEnabled
+	existing.OwnerEmail = req.OwnerEmail
 
 	if err := database.DB.Save(&existing).Error; err != nil {
 		return Internal("Failed to save settings", err)
