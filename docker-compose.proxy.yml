@@ -1,5 +1,5 @@
-# Aeterna - Docker Compose for nginx reverse proxy mode
-# Use this when you have an existing nginx installation
+# Aeterna - Docker Compose for proxy reverse proxy mode
+# Use this when you have an existing proxy installation
 # Exposes backend and frontend on dynamically assigned ports
 
 services:
@@ -15,13 +15,7 @@ services:
       - ALLOWED_ORIGINS=https://${DOMAIN}
       - BASE_URL=https://${DOMAIN}
       # Encryption key is provided via Docker secrets (mounted at /run/secrets/encryption_key)
-      - OWNER_EMAIL=${OWNER_EMAIL:-}
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASS=${SMTP_PASS:-}
-      - SMTP_FROM=${SMTP_FROM:-}
-      - SMTP_FROM_NAME=${SMTP_FROM_NAME:-Aeterna}
+
     command: ["./main", "--encryption-key-file=/run/secrets/encryption_key"]
     secrets:
       - encryption_key

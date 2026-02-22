@@ -40,9 +40,11 @@ cd aeterna
 ./install.sh
 ```
 
-### Manual Installation (Docker)
+### Manual Installation
 
-If you prefer not to use the installation script, you can install Aeterna manually using Docker Compose:
+If you prefer not to use the automated installation script, you can install Aeterna manually. The architecture is flexible and allows you to use **any reverse proxy** (Nginx, Caddy, Apache, Traefik, Cloudflare Tunnels, etc.) or no Docker at all if you compile it from source.
+
+#### Method 1: Docker Compose (Using our templates)
 
 1. **Clone the repository:**
    ```bash
@@ -66,22 +68,31 @@ If you prefer not to use the installation script, you can install Aeterna manual
    ```
 
 4. **Start the services:**
-   *For production (requires existing Nginx setup or handles its own via `docker-compose.nginx.yml`):*
+   *If you rely on your own external reverse proxy (Caddy, Nginx, Traefik, etc.):*
    ```bash
-   docker compose -f docker-compose.nginx.yml up -d
+   docker compose -f docker-compose.proxy.yml up -d
    ```
-   *For testing/development (no SSL):*
+   *This file exposes the backend on `127.0.0.1:8080` (by default) and front-end on `127.0.0.1:8081`. You simply route your traffic to these ports.*
+
+   *For local network testing (runs a bundled simple Nginx on port 5000):*
    ```bash
    docker compose -f docker-compose.simple.yml up -d
    ```
+
+#### Method 2: Fully Custom / Bare-Metal
+
+You are not bound to Docker. You can:
+1. Compile the Go backend (`cd backend && go build -o main .`) and run it as a systemd service.
+2. Build the React frontend (`cd frontend && npm install && npm run build`) and serve the generated static files directly from your web server of choice.
+3. Configure your reverse proxy to route `/api` requests to the Go backend, and the rest to your frontend build directory.
 
 ### Installation Modes
 
 During installation, you will be prompted to choose a mode:
 
-1. **Production (Nginx + SSL)** - *Recommended*
-   - Automatic HTTPS with Let's Encrypt
-   - Nginx reverse proxy
+1. **Production (Reverse Proxy + SSL)** - *Recommended*
+   - Specifically configured to work with Nginx and Let's Encrypt automatically via the script.
+   - You can also adapt this for Caddy, Apache, or Traefik.
    - Secure headers and configuration
 
 2. **Development (Simple)** - *Not Recommended for Production*
@@ -123,7 +134,7 @@ backend/     Go API server
 frontend/    React application  
 ```
 
-Both containerized. SQLite for storage (single file database). nginx for reverse proxy and SSL.
+Both components can run in Docker containers or natively. SQLite is used for storage (single file database). You can use **any reverse proxy** (proxy, caddy, apache) to serve them together and provide SSL.
 
 ## License
 

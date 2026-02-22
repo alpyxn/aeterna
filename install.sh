@@ -700,9 +700,9 @@ setup_repository() {
 # Get compose file for current mode
 get_compose_file() {
     case "$PROXY_MODE" in
-        nginx) echo "docker-compose.nginx.yml" ;;
+        nginx) echo "docker-compose.proxy.yml" ;;
         simple) echo "docker-compose.simple.yml" ;;
-        *) echo "docker-compose.nginx.yml" ;;
+        *) echo "docker-compose.proxy.yml" ;;
     esac
 }
 
@@ -1019,7 +1019,7 @@ start_application() {
     fi
     
     # Verify we're in the right directory (check for docker-compose files)
-    if [ ! -f "docker-compose.nginx.yml" ] && [ ! -f "docker-compose.simple.yml" ]; then
+    if [ ! -f "docker-compose.proxy.yml" ] && [ ! -f "docker-compose.simple.yml" ]; then
         error "Not in Aeterna installation directory. Missing docker-compose files."
     fi
     
@@ -1230,12 +1230,12 @@ create_backup() {
     
     # Determine compose file
     cd "${INSTALL_DIR:-/opt/aeterna}"
-    local compose_file="docker-compose.nginx.yml"
+    local compose_file="docker-compose.proxy.yml"
     if [ -f ".env" ]; then
         local mode=$(grep "PROXY_MODE=" .env 2>/dev/null | cut -d'=' -f2)
         case "$mode" in
             simple) compose_file="docker-compose.simple.yml" ;;
-            *) compose_file="docker-compose.nginx.yml" ;;
+            *) compose_file="docker-compose.proxy.yml" ;;
         esac
     fi
     
@@ -1296,7 +1296,7 @@ uninstall() {
     cd "$install_path"
     
     # Stop and remove containers with volumes
-    docker compose -f docker-compose.nginx.yml down -v --remove-orphans 2>/dev/null || true
+    docker compose -f docker-compose.proxy.yml down -v --remove-orphans 2>/dev/null || true
     docker compose -f docker-compose.simple.yml down -v --remove-orphans 2>/dev/null || true
     
     # Remove Docker images
@@ -1370,13 +1370,13 @@ check_status() {
     cd "$install_path"
     
     # Determine compose file and mode
-    local compose_file="docker-compose.nginx.yml"
+    local compose_file="docker-compose.proxy.yml"
     local mode="nginx"
     if [ -f ".env" ]; then
         mode=$(grep "PROXY_MODE=" .env 2>/dev/null | cut -d'=' -f2 || echo "nginx")
         case "$mode" in
             simple) compose_file="docker-compose.simple.yml" ;;
-            *) compose_file="docker-compose.nginx.yml" ;;
+            *) compose_file="docker-compose.proxy.yml" ;;
         esac
     fi
     
@@ -1454,12 +1454,12 @@ update_installation() {
     fi
     
     # Determine compose file
-    local compose_file="docker-compose.nginx.yml"
+    local compose_file="docker-compose.proxy.yml"
     if [ -f ".env" ]; then
         local mode=$(grep "PROXY_MODE=" .env 2>/dev/null | cut -d'=' -f2)
         case "$mode" in
             simple) compose_file="docker-compose.simple.yml" ;;
-            *) compose_file="docker-compose.nginx.yml" ;;
+            *) compose_file="docker-compose.proxy.yml" ;;
         esac
     fi
     
