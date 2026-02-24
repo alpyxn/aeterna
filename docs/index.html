@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aeterna - Dead Man's Switch</title>
+    <meta name="description"
+        content="Aeterna is a secure, privacy-focused dead man's switch. You write messages. You check in regularly. If you stop checking in, your messages are delivered.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Inter:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="glow-orb orb-1"></div>
+    <div class="glow-orb orb-2"></div>
+
+    <nav class="navbar">
+        <div class="container nav-content">
+            <div class="logo">
+                <span class="logo-text">Aeterna.</span>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#installation">Installation</a>
+                <a href="#architecture">Architecture</a>
+                <a href="https://github.com/alpyxn/aeterna" target="_blank" class="btn btn-primary">View on GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="container hero-content">
+            <div class="hero-text-content">
+                <div class="badge fade-in-up">Open Source & Secure</div>
+                <h1 class="fade-in-up delay-1">What words would you <span class="gradient-text">leave behind?</span>
+                </h1>
+                <p class="fade-in-up delay-2">Aeterna is a dead man's switch. You write messages. You check in
+                    regularly. If you stop checking in, your messages are delivered. It's that simple. And that
+                    important.</p>
+                <div class="hero-actions fade-in-up delay-3">
+                    <a href="https://github.com/alpyxn/aeterna" target="_blank" class="btn btn-primary btn-lg">Get
+                        Started</a>
+                    <a href="#features" class="btn btn-secondary btn-lg">Learn More</a>
+                </div>
+            </div>
+            <div class="hero-visual fade-in-up delay-4">
+                <div class="glass-card hero-image-container">
+                    <img src="assets/screenshots/create.png" alt="Aeterna Interface" class="hero-image">
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section id="features" class="features-section">
+        <div class="container">
+            <div class="section-header fade-in-up">
+                <h2>Designed for <span class="gradient-text">Absolute Security</span></h2>
+                <p>Aeterna holds these words. It watches. It waits. And when the time comes, it delivers.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card glass-card hover-glow fade-in-up">
+                    <div class="feature-icon">✉️</div>
+                    <h3>Email Delivery</h3>
+                    <p>Automatic delivery of your messages and files to your loved ones if you fail to check in.</p>
+                </div>
+                <div class="feature-card glass-card hover-glow fade-in-up delay-1">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Privacy-Focused</h3>
+                    <p>Messages and attachments are encrypted at rest (AES-256-GCM) on your private server.</p>
+                </div>
+                <div class="feature-card glass-card hover-glow fade-in-up delay-2">
+                    <div class="feature-icon">📎</div>
+                    <h3>File Attachments</h3>
+                    <p>Securely attach sensitive documents, photos, or instructions to your switches.</p>
+                </div>
+                <div class="feature-card glass-card hover-glow fade-in-up">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Webhook Integration</h3>
+                    <p>Trigger external services, home automation, or custom scripts when your switch is activated.</p>
+                </div>
+                <div class="feature-card glass-card hover-glow fade-in-up delay-1">
+                    <div class="feature-icon">🧹</div>
+                    <h3>Auto-Cleanup</h3>
+                    <p>Attachments are automatically deleted from the server immediately after delivery.</p>
+                </div>
+                <div class="feature-card glass-card hover-glow fade-in-up delay-2">
+                    <div class="feature-icon">💓</div>
+                    <h3>Heartbeat System</h3>
+                    <p>Simple check-in mechanism via web UI or a quick-link from your trusted email.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Screenshots Section removed per user request -->
+    <section id="installation" class="installation-section">
+        <div class="container">
+            <div class="section-header fade-in-up">
+                <h2>Flexible <span class="gradient-text">Installation</span></h2>
+                <p>From a one-click wizard to fully custom deployment. You are in control.</p>
+            </div>
+
+            <div class="tabs-container fade-in-up delay-1">
+                <div class="tabs-header">
+                    <button class="tab-btn active" data-tab="wizard">Wizard (Recommended)</button>
+                    <button class="tab-btn" data-tab="docker">Docker Compose</button>
+                    <button class="tab-btn" data-tab="baremetal">Bare-Metal</button>
+                </div>
+
+                <div class="tab-content active" id="wizard">
+                    <div class="glass-card terminal-card large-terminal">
+                        <div class="terminal-header">
+                            <span class="dot red"></span>
+                            <span class="dot yellow"></span>
+                            <span class="dot green"></span>
+                            <span class="terminal-title">Quick Installation</span>
+                        </div>
+                        <div class="terminal-body">
+                            <code><span class="comment"># We recommend using our interactive installer</span></code>
+                            <code><span class="prompt">$</span> git clone https://github.com/alpyxn/aeterna.git</code>
+                            <code><span class="prompt">$</span> cd aeterna</code>
+                            <code><span class="prompt">$</span> ./install.sh</code>
+                            <br>
+                            <code><span class="comment"># The script handles Nginx configuration, Let's Encrypt SSL,</span></code>
+                            <code><span class="comment"># and encryption key generation automatically.</span></code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="docker">
+                    <div class="glass-card terminal-card large-terminal">
+                        <div class="terminal-header">
+                            <span class="dot red"></span>
+                            <span class="dot yellow"></span>
+                            <span class="dot green"></span>
+                            <span class="terminal-title">Manual Docker</span>
+                        </div>
+                        <div class="terminal-body">
+                            <code><span class="comment"># 1. Generate encryption key</span></code>
+                            <code><span class="prompt">$</span> mkdir -p secrets</code>
+                            <code><span class="prompt">$</span> openssl rand -base64 32 | tr -d '\n' > secrets/encryption_key</code>
+                            <code><span class="prompt">$</span> chmod 600 secrets/encryption_key</code>
+                            <br>
+                            <code><span class="comment"># 2. Configure environment</span></code>
+                            <code><span class="prompt">$</span> cp .env.production.example .env && nano .env</code>
+                            <br>
+                            <code><span class="comment"># 3. Start services (Exposes 127.0.0.1:8080 & 127.0.0.1:8081)</span></code>
+                            <code><span class="prompt">$</span> docker compose -f docker-compose.proxy.yml up -d</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="baremetal">
+                    <div class="glass-card terminal-card large-terminal">
+                        <div class="terminal-header">
+                            <span class="dot red"></span>
+                            <span class="dot yellow"></span>
+                            <span class="dot green"></span>
+                            <span class="terminal-title">Compile from Source</span>
+                        </div>
+                        <div class="terminal-body">
+                            <code><span class="comment"># You are not bound to Docker. Aeterna can be built natively.</span></code>
+                            <br>
+                            <code><span class="comment"># 1. Backend (Go 1.21+)</span></code>
+                            <code><span class="prompt">$</span> cd backend && go build -o main .</code>
+                            <code><span class="comment"># Run the binary via systemd</span></code>
+                            <br>
+                            <code><span class="comment"># 2. Frontend (Node.js)</span></code>
+                            <code><span class="prompt">$</span> cd frontend && npm install && npm run build</code>
+                            <code><span class="comment"># Serve the 'dist' folder with your web server</span></code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="architecture" class="architecture-section">
+        <div class="container">
+            <div class="architecture-content fade-in-up">
+                <h2>Built for <span class="gradient-text">Resilience</span></h2>
+                <p>Designed to be lightweight, fast, and entirely self-contained. Run it anywhere from a Raspberry Pi to
+                    a massive enterprise cluster with Docker or Native Bare-Metal deployments.</p>
+                <div class="tech-stack">
+                    <span class="tech-badge">Go 1.22+</span>
+                    <span class="tech-badge">React & Vite</span>
+                    <span class="tech-badge">SQLite Engine</span>
+                    <span class="tech-badge">AES-256-GCM Encryption</span>
+                    <span class="tech-badge">Docker & Compose</span>
+                </div>
+                <div class="glass-card command-card fade-in-up delay-1" style="margin-top: 3rem;">
+                    <div class="terminal-body" style="font-size: 0.9rem;">
+                        <code><span class="comment"># Update to the latest version</span></code>
+                        <code><span class="prompt">$</span> ./install.sh --update</code>
+                        <br>
+                        <code><span class="comment"># Create a full backup</span></code>
+                        <code><span class="prompt">$</span> ./install.sh --backup</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="logo-text">Aeterna.</span>
+                    <p>"Named for the Latin word meaning 'eternal' — because some messages are meant to outlast us."</p>
+                </div>
+                <div class="footer-links">
+                    <a href="https://github.com/alpyxn/aeterna" target="_blank">GitHub Repository</a>
+                    <a href="https://github.com/alpyxn/aeterna/blob/main/LICENSE" target="_blank">GPL-3.0 License</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; <span id="year"></span> Aeterna Contributors. Open Source Software.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+
+</html>
