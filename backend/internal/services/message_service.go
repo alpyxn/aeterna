@@ -16,7 +16,7 @@ var msgValidationService = ValidationService{}
 var msgFileService = FileService{}
 var msgSettingsService = SettingsService{}
 
-func (s MessageService) Create(content, recipientEmail string, triggerDuration int) (models.Message, error) {
+func (s MessageService) Create(content, recipientEmail string, triggerDuration int, reminders []int) (models.Message, error) {
 	// Validate SMTP configuration before creating switch
 	settings, err := msgSettingsService.Get()
 	if err != nil {
@@ -60,8 +60,27 @@ func (s MessageService) Create(content, recipientEmail string, triggerDuration i
 		Status:          models.StatusActive,
 	}
 
-	if err := database.DB.Create(&msg).Error; err != nil {
-		return models.Message{}, Internal("Failed to create message", err)
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&msg).Error; err != nil {
+			return Internal("Failed to create message", err)
+		}
+
+		for _, minutesBefore := range reminders {
+			reminder := models.MessageReminder{
+				MessageID:     msg.ID,
+				MinutesBefore: minutesBefore,
+				Sent:          false,
+			}
+			if err := tx.Create(&reminder).Error; err != nil {
+				return Internal("Failed to create reminder", err)
+			}
+			msg.Reminders = append(msg.Reminders, reminder)
+		}
+		return nil
+	})
+
+	if err != nil {
+		return models.Message{}, err
 	}
 
 	// Return decrypted content for API consumers
@@ -71,7 +90,7 @@ func (s MessageService) Create(content, recipientEmail string, triggerDuration i
 
 func (s MessageService) GetByID(id string) (models.Message, error) {
 	var msg models.Message
-	if err := database.DB.First(&msg, "id = ?", id).Error; err != nil {
+	if err := database.DB.Preload("Reminders").First(&msg, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Message{}, NotFound("Message not found", err)
 		}
@@ -92,7 +111,7 @@ func (s MessageService) GetByID(id string) (models.Message, error) {
 
 func (s MessageService) List() ([]models.Message, error) {
 	var messages []models.Message
-	if err := database.DB.Order("created_at DESC").Find(&messages).Error; err != nil {
+	if err := database.DB.Preload("Reminders").Order("created_at DESC").Find(&messages).Error; err != nil {
 		return nil, Internal("Failed to fetch messages", err)
 	}
 	for i := range messages {
@@ -151,7 +170,7 @@ func (s MessageService) Delete(id string) error {
 	return nil
 }
 
-func (s MessageService) Update(id, content string, triggerDuration int) (models.Message, error) {
+func (s MessageService) Update(id, content string, triggerDuration int, reminders []int) (models.Message, error) {
 	var msg models.Message
 	if err := database.DB.First(&msg, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -185,10 +204,36 @@ func (s MessageService) Update(id, content string, triggerDuration int) (models.
 	msg.Content = encrypted
 	msg.TriggerDuration = triggerDuration
 	msg.LastSeen = time.Now()
-	msg.ReminderSent = false
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		// Update msg fields
+		if err := tx.Save(&msg).Error; err != nil {
+			return Internal("Failed to update message", err)
+		}
 
-	if err := database.DB.Save(&msg).Error; err != nil {
-		return models.Message{}, Internal("Failed to update message", err)
+		// Delete old reminders
+		if err := tx.Where("message_id = ?", msg.ID).Delete(&models.MessageReminder{}).Error; err != nil {
+			return Internal("Failed to delete old reminders", err)
+		}
+
+		// Create new reminders
+		msg.Reminders = []models.MessageReminder{}
+		for _, minutesBefore := range reminders {
+			reminder := models.MessageReminder{
+				MessageID:     msg.ID,
+				MinutesBefore: minutesBefore,
+				Sent:          false,
+			}
+			if err := tx.Create(&reminder).Error; err != nil {
+				return Internal("Failed to create new reminder", err)
+			}
+			msg.Reminders = append(msg.Reminders, reminder)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return models.Message{}, err
 	}
 
 	// Return decrypted content for API consumers

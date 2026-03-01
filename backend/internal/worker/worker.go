@@ -33,26 +33,37 @@ func checkReminders() {
 		return // No owner email or SMTP configured
 	}
 
-	var messages []models.Message
+	var reminders []models.MessageReminder
 
-	// Find active messages where 50% of time has passed and reminder not sent
-	// last_seen + (trigger_duration * 0.5 minutes) < now AND reminder_sent = false
-	err = database.DB.Where(
-		"status = ? AND reminder_sent = ? AND datetime(last_seen, '+' || CAST(CAST(trigger_duration * 0.5 AS INTEGER) AS TEXT) || ' minutes') < datetime('now')",
-		models.StatusActive, false,
-	).Find(&messages).Error
+	// Find unsent reminders for active messages where the time remaining until trigger
+	// is less than or equal to the reminder's MinutesBefore.
+	// trigger_time = last_seen + trigger_duration
+	// remaining_time = trigger_time - now
+	// We want: remaining_time <= minutes_before
+	// which is: last_seen + trigger_duration - now <= minutes_before
+	// or: now >= last_seen + trigger_duration - minutes_before
+	err = database.DB.Table("message_reminders").
+		Select("message_reminders.*").
+		Joins("JOIN messages ON messages.id = message_reminders.message_id").
+		Where("messages.status = ?", models.StatusActive).
+		Where("message_reminders.sent = ?", false).
+		Where("datetime('now') >= datetime(messages.last_seen, '+' || CAST((messages.trigger_duration - message_reminders.minutes_before) AS TEXT) || ' minutes')").
+		Find(&reminders).Error
 
 	if err != nil {
 		slog.Error("Error checking reminders", "error", err)
 		return
 	}
 
-	for _, msg := range messages {
-		sendReminderEmail(settings, msg)
+	for _, req := range reminders {
+		var msg models.Message
+		if err := database.DB.First(&msg, "id = ?", req.MessageID).Error; err == nil {
+			sendReminderEmail(settings, msg, req)
+		}
 	}
 }
 
-func sendReminderEmail(settings models.Settings, msg models.Message) {
+func sendReminderEmail(settings models.Settings, msg models.Message, reminder models.MessageReminder) {
 	// Calculate remaining time
 	lastSeen := msg.LastSeen
 	triggerTime := lastSeen.Add(time.Duration(msg.TriggerDuration) * time.Minute)
@@ -92,9 +103,9 @@ Sent by Aeterna`, remainingStr, msg.RecipientEmail, quickLink)
 		return
 	}
 
-	// Mark reminder as sent
-	database.DB.Model(&msg).Update("reminder_sent", true)
-	slog.Info("Reminder email sent", "owner", settings.OwnerEmail, "message_id", msg.ID)
+	// Mark specific reminder as sent
+	database.DB.Model(&reminder).Update("sent", true)
+	slog.Info("Reminder email sent", "owner", settings.OwnerEmail, "message_id", msg.ID, "minutes_before", reminder.MinutesBefore)
 }
 
 func checkHeartbeats() {

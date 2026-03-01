@@ -19,10 +19,24 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function formatMinutes(minutes) {
+    if (minutes >= 1440) {
+        // e.g., 2880 -> 2, 3600 -> 2.5
+        const days = Number((minutes / 1440).toFixed(1));
+        return `${days} Day${days !== 1 ? 's' : ''} Before`;
+    }
+    if (minutes >= 60) {
+        const hours = Number((minutes / 60).toFixed(1));
+        return `${hours} Hour${hours !== 1 ? 's' : ''} Before`;
+    }
+    return `${minutes} Minutes Before`;
+}
+
 export default function CreateSwitch({ setRoute }) {
     const [message, setMessage] = useState('');
     const [email, setEmail] = useState('');
     const [duration, setDuration] = useState(1440);
+    const [reminders, setReminders] = useState([720]); // default to 12 hours before trigger
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
@@ -46,6 +60,44 @@ export default function CreateSwitch({ setRoute }) {
         { label: '6 Months', value: 259200 },
         { label: '1 Year', value: 525600 },
     ];
+
+    const reminderPresets = [
+        { label: '15 Minutes Before', value: 15 },
+        { label: '1 Hour Before', value: 60 },
+        { label: '12 Hours Before', value: 720 },
+        { label: '1 Day Before', value: 1440 },
+        { label: '2 Days Before', value: 2880 },
+        { label: '3 Days Before', value: 4320 },
+        { label: '5 Days Before', value: 7200 },
+        { label: '10 Days Before', value: 14400 },
+    ];
+
+    const handleDurationChange = (newDuration) => {
+        setDuration(newDuration);
+        // Add sensible default reminders if none are valid for the new duration
+        const validReminders = reminders.filter(r => r < newDuration);
+        if (validReminders.length === 0) {
+            if (newDuration >= 1440) { // >= 1 day
+                setReminders([newDuration / 2]); // 50%
+            } else if (newDuration >= 60) { // >= 1 hour
+                setReminders([15]); // 15 mins
+            } else {
+                setReminders([]);
+            }
+        } else {
+            setReminders(validReminders);
+        }
+    };
+
+    const addReminder = (value) => {
+        if (!reminders.includes(value) && value < duration) {
+            setReminders([...reminders, value].sort((a, b) => b - a)); // sort descending (longest before trigger first)
+        }
+    };
+
+    const removeReminder = (value) => {
+        setReminders(reminders.filter(r => r !== value));
+    };
 
     const validateFile = (file) => {
         const ext = '.' + file.name.split('.').pop().toLowerCase();
@@ -136,7 +188,8 @@ export default function CreateSwitch({ setRoute }) {
                 body: JSON.stringify({
                     content: message,
                     recipient_email: email,
-                    trigger_duration: duration
+                    trigger_duration: duration,
+                    reminders: reminders
                 })
             }).catch(err => {
                 if (err.message.includes('SMTP_NOT_CONFIGURED') || err.message.includes('SMTP_CONNECTION_FAILED')) {
@@ -324,7 +377,7 @@ export default function CreateSwitch({ setRoute }) {
                             </label>
                             <Select
                                 value={duration}
-                                onChange={(e) => setDuration(Number(e.target.value))}
+                                onChange={(e) => handleDurationChange(Number(e.target.value))}
                                 className="bg-dark-950 border-dark-700 text-dark-100"
                             >
                                 {timePresets.map(preset => (
@@ -333,6 +386,52 @@ export default function CreateSwitch({ setRoute }) {
                                     </option>
                                 ))}
                             </Select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-medium text-dark-400 flex items-center gap-2">
+                            <Clock className="w-3 h-3 text-teal-400" /> Reminders Before Trigger
+                        </label>
+                        <div className="flex flex-col gap-2 bg-dark-900 border border-dark-700 rounded-lg p-3">
+                            {reminders.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {reminders.map(r => {
+                                        const preset = reminderPresets.find(p => p.value === r);
+                                        const label = preset ? preset.label : formatMinutes(r);
+                                        return (
+                                            <div key={r} className="flex items-center gap-1 bg-dark-800 text-dark-200 text-xs px-2 py-1 rounded">
+                                                <span>{label}</span>
+                                                <button onClick={() => removeReminder(r)} className="text-dark-400 hover:text-red-400">
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-dark-500">No reminders configured. The switch will trigger without warning.</p>
+                            )}
+
+                            <div className="flex items-center gap-2 mt-2">
+                                <Select
+                                    onChange={(e) => {
+                                        if (e.target.value) {
+                                            addReminder(Number(e.target.value));
+                                            e.target.value = '';
+                                        }
+                                    }}
+                                    className="bg-dark-950 border-dark-700 text-dark-100 text-xs h-8"
+                                    value={""}
+                                >
+                                    <option value="" disabled>Add a reminder...</option>
+                                    {reminderPresets.filter(p => !reminders.includes(p.value) && p.value < duration).map(preset => (
+                                        <option key={preset.value} value={preset.value}>
+                                            {preset.label}
+                                        </option>
+                                    ))}
+                                </Select>
+                            </div>
                         </div>
                     </div>
 

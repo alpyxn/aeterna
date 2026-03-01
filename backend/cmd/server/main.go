@@ -62,7 +62,7 @@ func main() {
 
 	// Auto Migrate - GORM handles schema creation and updates for SQLite
 	// SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS, so we rely on AutoMigrate
-	if err := database.DB.AutoMigrate(&models.Message{}, &models.Settings{}, &models.Webhook{}, &models.Attachment{}); err != nil {
+	if err := database.DB.AutoMigrate(&models.Message{}, &models.MessageReminder{}, &models.Settings{}, &models.Webhook{}, &models.Attachment{}); err != nil {
 		log.Fatal("Failed to migrate database: ", err)
 	}
 

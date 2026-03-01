@@ -20,6 +20,19 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function formatMinutes(minutes) {
+    if (minutes >= 1440) {
+        // e.g., 2880 -> 2, 3600 -> 2.5
+        const days = Number((minutes / 1440).toFixed(1));
+        return `${days} Day${days !== 1 ? 's' : ''} Before`;
+    }
+    if (minutes >= 60) {
+        const hours = Number((minutes / 60).toFixed(1));
+        return `${hours} Hour${hours !== 1 ? 's' : ''} Before`;
+    }
+    return `${minutes} Minutes Before`;
+}
+
 export default function Dashboard() {
     const [messages, setMessages] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -92,6 +105,7 @@ export default function Dashboard() {
     const [editingMessage, setEditingMessage] = useState(null);
     const [editContent, setEditContent] = useState('');
     const [editDuration, setEditDuration] = useState(1440);
+    const [editReminders, setEditReminders] = useState([]);
     const [editDialogOpen, setEditDialogOpen] = useState(false);
     const [editAttachments, setEditAttachments] = useState([]);
     const [editNewFiles, setEditNewFiles] = useState([]);
@@ -113,10 +127,48 @@ export default function Dashboard() {
         { label: '1 Year', value: 525600 },
     ];
 
+    const reminderPresets = [
+        { label: '15 Minutes Before', value: 15 },
+        { label: '1 Hour Before', value: 60 },
+        { label: '12 Hours Before', value: 720 },
+        { label: '1 Day Before', value: 1440 },
+        { label: '2 Days Before', value: 2880 },
+        { label: '3 Days Before', value: 4320 },
+        { label: '5 Days Before', value: 7200 },
+        { label: '10 Days Before', value: 14400 },
+    ];
+
+    const handleEditDurationChange = (newDuration) => {
+        setEditDuration(newDuration);
+        const validReminders = editReminders.filter(r => r < newDuration);
+        if (validReminders.length === 0) {
+            if (newDuration >= 1440) {
+                setEditReminders([newDuration / 2]);
+            } else if (newDuration >= 60) {
+                setEditReminders([15]);
+            } else {
+                setEditReminders([]);
+            }
+        } else {
+            setEditReminders(validReminders);
+        }
+    };
+
+    const addEditReminder = (value) => {
+        if (!editReminders.includes(value) && value < editDuration) {
+            setEditReminders([...editReminders, value].sort((a, b) => b - a)); // sort descending
+        }
+    };
+
+    const removeEditReminder = (value) => {
+        setEditReminders(editReminders.filter(r => r !== value));
+    };
+
     const openEditDialog = async (message) => {
         setEditingMessage(message);
         setEditContent(message.content);
         setEditDuration(message.trigger_duration);
+        setEditReminders(message.reminders ? message.reminders.map(r => r.minutes_before) : []);
         setEditNewFiles([]);
         setEditDialogOpen(true);
         setShowEditAttachments(message.attachment_count > 0);
@@ -187,7 +239,8 @@ export default function Dashboard() {
                 method: 'PUT',
                 body: JSON.stringify({
                     content: editContent,
-                    trigger_duration: editDuration
+                    trigger_duration: editDuration,
+                    reminders: editReminders
                 })
             });
 
@@ -565,7 +618,7 @@ export default function Dashboard() {
                             </label>
                             <Select
                                 value={editDuration}
-                                onChange={(e) => setEditDuration(Number(e.target.value))}
+                                onChange={(e) => handleEditDurationChange(Number(e.target.value))}
                                 className="bg-dark-950 border-dark-700 text-dark-100"
                             >
                                 {timePresets.map(preset => (
@@ -577,6 +630,52 @@ export default function Dashboard() {
                             <p className="text-[10px] text-dark-500">
                                 Timer will reset when you save changes
                             </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-dark-400 flex items-center gap-2">
+                                <Clock className="w-3 h-3 text-teal-400" /> Reminders Before Trigger
+                            </label>
+                            <div className="flex flex-col gap-2 bg-dark-900 border border-dark-700 rounded-lg p-3">
+                                {editReminders.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {editReminders.map(r => {
+                                            const preset = reminderPresets.find(p => p.value === r);
+                                            const label = preset ? preset.label : formatMinutes(r);
+                                            return (
+                                                <div key={r} className="flex items-center gap-1 bg-dark-800 text-dark-200 text-xs px-2 py-1 rounded">
+                                                    <span>{label}</span>
+                                                    <button onClick={() => removeEditReminder(r)} className="text-dark-400 hover:text-red-400">
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-dark-500">No reminders configured. The switch will trigger without warning.</p>
+                                )}
+
+                                <div className="flex items-center gap-2 mt-2">
+                                    <Select
+                                        onChange={(e) => {
+                                            if (e.target.value) {
+                                                addEditReminder(Number(e.target.value));
+                                                e.target.value = '';
+                                            }
+                                        }}
+                                        className="bg-dark-950 border-dark-700 text-dark-100 text-xs h-8"
+                                        value={""}
+                                    >
+                                        <option value="" disabled>Add a reminder...</option>
+                                        {reminderPresets.filter(p => !editReminders.includes(p.value) && p.value < editDuration).map(preset => (
+                                            <option key={preset.value} value={preset.value}>
+                                                {preset.label}
+                                            </option>
+                                        ))}
+                                    </Select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">

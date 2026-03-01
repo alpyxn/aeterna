@@ -9,6 +9,7 @@ type CreateMessageRequest struct {
 	Content         string `json:"content"`
 	RecipientEmail  string `json:"recipient_email"`
 	TriggerDuration int    `json:"trigger_duration"` // in minutes
+	Reminders       []int  `json:"reminders"`        // minutes before trigger
 }
 
 type HeartbeatRequest struct {
@@ -23,7 +24,7 @@ func CreateMessage(c *fiber.Ctx) error {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
 
-	msg, err := messageService.Create(req.Content, req.RecipientEmail, req.TriggerDuration)
+	msg, err := messageService.Create(req.Content, req.RecipientEmail, req.TriggerDuration, req.Reminders)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -81,6 +82,7 @@ func DeleteMessage(c *fiber.Ctx) error {
 type UpdateMessageRequest struct {
 	Content         string `json:"content"`
 	TriggerDuration int    `json:"trigger_duration"`
+	Reminders       []int  `json:"reminders"`
 }
 
 func UpdateMessage(c *fiber.Ctx) error {
@@ -90,7 +92,7 @@ func UpdateMessage(c *fiber.Ctx) error {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
 
-	msg, err := messageService.Update(id, req.Content, req.TriggerDuration)
+	msg, err := messageService.Update(id, req.Content, req.TriggerDuration, req.Reminders)
 	if err != nil {
 		return writeError(c, err)
 	}
