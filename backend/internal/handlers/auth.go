@@ -120,7 +120,7 @@ func issueSessionCookie(c *fiber.Ctx) error {
 		Path:     "/",
 		HTTPOnly: true,
 		Secure:   secure,
-		SameSite: fiber.CookieSameSiteLaxMode, // Lax allows cross-origin for redirects
+		SameSite: fiber.CookieSameSiteStrictMode,
 	})
 	return nil
 }
@@ -136,6 +136,6 @@ func clearSessionCookie(c *fiber.Ctx) {
 		Path:     "/",
 		HTTPOnly: true,
 		Secure:   secure,
-		SameSite: fiber.CookieSameSiteLaxMode,
+		SameSite: fiber.CookieSameSiteStrictMode,
 	})
 }

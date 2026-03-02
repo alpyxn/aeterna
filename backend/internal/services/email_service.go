@@ -264,6 +264,8 @@ func (s EmailService) sendEmailSTARTTLS(settings models.Settings, addr, from, to
 		if err = client.StartTLS(tlsConfig); err != nil {
 			return fmt.Errorf("STARTTLS failed: %v", err)
 		}
+	} else {
+		return fmt.Errorf("STARTTLS is required but the SMTP server (%s) does not support it; refusing to send credentials in plaintext", settings.SMTPHost)
 	}
 
 	if err = authWithFallback(client, settings.SMTPUser, settings.SMTPPass, settings.SMTPHost); err != nil {

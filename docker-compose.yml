@@ -3,8 +3,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
+    # Port intentionally NOT exposed externally — access only via Nginx proxy on the internal network
     env_file:
       - .env
     environment:
