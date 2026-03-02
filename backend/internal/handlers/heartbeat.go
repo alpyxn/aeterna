@@ -8,6 +8,7 @@ import (
 	"github.com/alpyxn/aeterna/backend/internal/models"
 	"github.com/alpyxn/aeterna/backend/internal/services"
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm"
 )
 
 var settingsService = services.SettingsService{}
@@ -33,17 +34,29 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 
 	// Handle POST request - trigger heartbeat
 	if c.Method() == "POST" {
-		// Update all active messages
-		now := time.Now().UTC()
-		result := database.DB.Model(&models.Message{}).
-			Where("status = ?", models.StatusActive).
-			Updates(map[string]interface{}{
-				"last_seen":     now,
-				"reminder_sent": false,
-			})
+		// Execute both updates within a single transaction to ensure data consistency
+		err = database.DB.Transaction(func(tx *gorm.DB) error {
+			now := time.Now().UTC()
 
-		if result.Error != nil {
-			return writeError(c, services.Internal("Failed to update heartbeats", result.Error))
+			// 1. Update all active messages
+			if err := tx.Model(&models.Message{}).
+				Where("status = ?", models.StatusActive).
+				Update("last_seen", now).Error; err != nil {
+				return err
+			}
+
+			// 2. Reset sent statuses for reminders associated with active messages
+			if err := tx.Model(&models.MessageReminder{}).
+				Where("message_id IN (SELECT id FROM messages WHERE status = ?)", models.StatusActive).
+				Update("sent", false).Error; err != nil {
+				return err
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return writeError(c, services.Internal("Failed to update heartbeats", err))
 		}
 
 		// Return success HTML page

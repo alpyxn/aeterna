@@ -87,9 +87,6 @@ func main() {
 	// Ensure webhook_enabled has default value
 	database.DB.Exec("UPDATE settings SET webhook_enabled = 0 WHERE webhook_enabled IS NULL;")
 
-	// Ensure reminder_sent has default value
-	database.DB.Exec("UPDATE messages SET reminder_sent = 0 WHERE reminder_sent IS NULL;")
-
 	// Create uploads directory
 	if err := services.EnsureUploadsDir(); err != nil {
 		log.Fatal("Failed to create uploads directory: ", err)
