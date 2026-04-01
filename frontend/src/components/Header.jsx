@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { LayoutDashboard, PlusCircle, LogOut, Settings, Menu, X } from 'lucide-react';
 import { Button } from "@/components/ui/button"
 
-function NavButton({ route, icon: Icon, label, currentRoute, onNavigate }) {
+function NavButton({ route, icon, label, currentRoute, onNavigate }) {
+    const IconComponent = icon;
+
     return (
         <Button
             variant="ghost"
@@ -10,7 +12,7 @@ function NavButton({ route, icon: Icon, label, currentRoute, onNavigate }) {
             className={`text-dark-400 hover:text-dark-100 hover:bg-dark-800 w-full md:w-auto justify-start md:justify-center ${currentRoute === route ? 'bg-dark-800 text-dark-100' : ''}`}
             onClick={() => onNavigate(route)}
         >
-            <Icon className="w-4 h-4 mr-2" />
+            <IconComponent className="w-4 h-4 mr-2" />
             {label}
         </Button>
     );
