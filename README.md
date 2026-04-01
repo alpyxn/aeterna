@@ -149,30 +149,19 @@ The `install.sh` script includes management commands:
 | `./install.sh --status` | Check service health and status |
 | `./install.sh --uninstall` | Remove containers and installation |
 
-## Docker Images (GHCR + Docker Hub)
+## Docker Images (GHCR)
 
-This repository includes a GitHub Actions workflow at `.github/workflows/docker-publish.yml` that publishes multi-arch images for both services:
+```bash
+docker pull ghcr.io/alpyxn/aeterna-backend:main
+docker pull ghcr.io/alpyxn/aeterna-frontend:main
+```
 
-- `ghcr.io/<github-owner>/aeterna-backend`
-- `ghcr.io/<github-owner>/aeterna-frontend`
-- `docker.io/<dockerhub-username>/aeterna-backend`
-- `docker.io/<dockerhub-username>/aeterna-frontend`
+## Docker Images (Docker Hub)
 
-Publishing is triggered on:
-
-- push to `main`
-- git tag pushes like `v1.0.0`
-- manual run from the Actions tab (`workflow_dispatch`)
-
-Required repository secrets:
-
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN` (Docker Hub access token)
-
-Notes:
-
-- GHCR publishing uses `GITHUB_TOKEN` automatically.
-- Docker Hub publish steps are skipped if Docker Hub secrets are not set.
+```bash
+docker pull docker.io/alpyxn/aeterna-backend:main
+docker pull docker.io/alpyxn/aeterna-frontend:main
+```
 
 ## Configuration
 
