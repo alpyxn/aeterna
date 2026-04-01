@@ -1,7 +1,7 @@
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
-ARG VITE_API_URL
+ARG VITE_API_URL=/api
 ENV VITE_API_URL=$VITE_API_URL
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
