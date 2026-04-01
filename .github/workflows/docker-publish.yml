@@ -26,10 +26,12 @@ jobs:
             context: ./backend
             dockerfile: ./backend/Dockerfile
             image_name: aeterna-backend
+            platforms: linux/amd64,linux/arm64
           - service: frontend
             context: ./frontend
             dockerfile: ./frontend/Dockerfile
             image_name: aeterna-frontend
+            platforms: linux/amd64
 
     steps:
       - name: Checkout
@@ -65,7 +67,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platforms }}
           tags: ${{ steps.meta_ghcr.outputs.tags }}
           labels: ${{ steps.meta_ghcr.outputs.labels }}
           cache-from: type=gha
@@ -97,7 +99,7 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platforms }}
           tags: ${{ steps.meta_dockerhub.outputs.tags }}
           labels: ${{ steps.meta_dockerhub.outputs.labels }}
           cache-from: type=gha
