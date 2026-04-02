@@ -18,6 +18,7 @@
 - [Quick Start](#quick-start)
 - [Management](#management)
 - [Configuration](#configuration)
+- [Reverse Proxy Templates](#reverse-proxy-templates)
 - [Security](#security)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
@@ -247,6 +248,14 @@ The installer guides you through basic configuration:
 - **Encryption**: Automatically generates a unique AES-256 key
 
 **SMTP Settings** (required for sending emails) are configured post-installation through the application's **Settings** menu. This allows for live testing and easier management.
+
+## Reverse Proxy Templates
+
+Ready-to-use examples for **Nginx**, **Traefik**, and **Caddy** are available in:
+
+- [`docs/proxy-templates.md`](docs/proxy-templates.md)
+
+This document also includes required `.env` values (`ALLOWED_ORIGINS`, `BASE_URL`) and deployment notes.
 
 
 
