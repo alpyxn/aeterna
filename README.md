@@ -98,22 +98,28 @@ If you prefer not to use the automated installation script, you can deploy Aeter
 
 3. **Create `.env`:**
    ```bash
-  SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s icanhazip.com)
+   SERVER_IP="$(curl -4fsS ifconfig.me || curl -4fsS icanhazip.com || true)"
+   if [ -z "$SERVER_IP" ]; then
+     echo "Could not detect public IPv4 automatically. Set SERVER_IP manually." >&2
+     exit 1
+   fi
 
-  cat > .env <<EOF
-  # Use your public domain (recommended) or server IP
-  DOMAIN=${SERVER_IP}
+   cat > .env <<EOF
+   # Use your public domain (recommended) or server IP
+   DOMAIN=${SERVER_IP}
    ENV=production
    VITE_API_URL=/api
-  # Must match exactly what you open in the browser
-  ALLOWED_ORIGINS=http://${SERVER_IP}:5000,http://localhost:5000,http://127.0.0.1:5000
-  BASE_URL=http://${SERVER_IP}:5000
-  PROXY_MODE=simple
+   # Must match exactly what you open in the browser
+   ALLOWED_ORIGINS=http://${SERVER_IP}:5000,http://localhost:5000,http://127.0.0.1:5000
+   BASE_URL=http://${SERVER_IP}:5000
+   PROXY_MODE=simple
    EOF
    ```
 
   Notes:
-  - If you use a domain, replace `DOMAIN`, `ALLOWED_ORIGINS`, and `BASE_URL` with `https://your-domain` values.
+  - If you use a domain, set:
+    - `ALLOWED_ORIGINS=https://your-domain`
+    - `BASE_URL=https://your-domain`
   - `ALLOWED_ORIGINS` must include the exact origin shown in your browser address bar (scheme + host + port).
 
 
