@@ -98,14 +98,24 @@ If you prefer not to use the automated installation script, you can deploy Aeter
 
 3. **Create `.env`:**
    ```bash
-   cat > .env << 'EOF'
-   DOMAIN=localhost
+  SERVER_IP=$(curl -4 -s ifconfig.me || curl -4 -s icanhazip.com)
+
+  cat > .env <<EOF
+  # Use your public domain (recommended) or server IP
+  DOMAIN=${SERVER_IP}
    ENV=production
    VITE_API_URL=/api
-   ALLOWED_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
-   BASE_URL=http://localhost:5000
+  # Must match exactly what you open in the browser
+  ALLOWED_ORIGINS=http://${SERVER_IP}:5000,http://localhost:5000,http://127.0.0.1:5000
+  BASE_URL=http://${SERVER_IP}:5000
+  PROXY_MODE=simple
    EOF
    ```
+
+  Notes:
+  - If you use a domain, replace `DOMAIN`, `ALLOWED_ORIGINS`, and `BASE_URL` with `https://your-domain` values.
+  - `ALLOWED_ORIGINS` must include the exact origin shown in your browser address bar (scheme + host + port).
+
 
 4. **Create `docker-compose.yml` using package images:**
    ```yaml
