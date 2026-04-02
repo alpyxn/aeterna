@@ -80,49 +80,124 @@ cd aeterna
 
 ### Manual Installation
 
-If you prefer not to use the automated installation script, you can install Aeterna manually. The architecture is flexible and allows you to use **any reverse proxy** (Nginx, Caddy, Apache, Traefik, Cloudflare Tunnels, etc.) or no Docker at all if you compile it from source.
+If you prefer not to use the automated installation script, you can deploy Aeterna directly with our published Docker images.
 
-#### Method 1: Docker Compose (Using our templates)
+#### Docker Compose (Published Images)
 
-1. **Clone the repository:**
+1. **Create a new folder and move into it:**
    ```bash
-   git clone https://github.com/alpyxn/aeterna.git
-   cd aeterna
+   mkdir -p aeterna && cd aeterna
    ```
 
-2. **Generate encryption key:**
+2. **Create required directories and encryption key:**
    ```bash
-   mkdir -p secrets
+   mkdir -p data secrets
    openssl rand -base64 32 | tr -d '\n' > secrets/encryption_key
    chmod 600 secrets/encryption_key
    ```
 
-3. **Configure environment:**
-   Create a `.env` file based on your environment.
+3. **Create `.env`:**
    ```bash
-   cp .env.production.example .env
-   # Edit .env and configure your DOMAIN, etc.
-   nano .env
+   cat > .env << 'EOF'
+   DOMAIN=localhost
+   ENV=production
+   VITE_API_URL=/api
+   ALLOWED_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
+   BASE_URL=http://localhost:5000
+   EOF
    ```
 
-4. **Start the services:**
-   *If you rely on your own external reverse proxy (Caddy, Nginx, Traefik, etc.):*
-   ```bash
-   docker compose -f docker-compose.proxy.yml up -d
+4. **Create `docker-compose.yml` using package images:**
+   ```yaml
+   services:
+     backend:
+       image: ghcr.io/alpyxn/aeterna-backend:main
+       env_file:
+         - .env
+       environment:
+         - DATABASE_PATH=/app/data/aeterna.db
+         - ENV=production
+         - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+         - BASE_URL=${BASE_URL:-http://${DOMAIN}:5000}
+       command: ["./main", "--encryption-key-file=/run/secrets/encryption_key"]
+       secrets:
+         - encryption_key
+       volumes:
+         - ./data:/app/data
+       restart: always
+       networks:
+         - aeterna-net
+
+     frontend:
+       image: ghcr.io/alpyxn/aeterna-frontend:main
+       depends_on:
+         - backend
+       restart: always
+       networks:
+         - aeterna-net
+
+     proxy:
+       image: nginx:alpine
+       ports:
+         - "5000:80"
+       volumes:
+         - ./proxy-simple.conf:/etc/nginx/conf.d/default.conf:ro
+       depends_on:
+         - backend
+         - frontend
+       restart: always
+       networks:
+         - aeterna-net
+
+   secrets:
+     encryption_key:
+       file: ./secrets/encryption_key
+
+   networks:
+     aeterna-net:
+       driver: bridge
    ```
-   *This file exposes the backend on `127.0.0.1:8080` (by default) and front-end on `127.0.0.1:8081`. You simply route your traffic to these ports.*
 
-   *For local network testing (runs a bundled simple Nginx on port 5000):*
-   ```bash
-   docker compose -f docker-compose.simple.yml up -d
+5. **Create `proxy-simple.conf`:**
+   ```nginx
+   server {
+       listen 80;
+       server_name localhost;
+
+       resolver 127.0.0.11 valid=30s;
+       set $backend_upstream http://backend:3000;
+
+       location / {
+           proxy_pass http://frontend:80;
+           proxy_http_version 1.1;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+
+       location /api/ {
+           proxy_pass $backend_upstream;
+           proxy_http_version 1.1;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+       }
+   }
    ```
 
-#### Method 2: Fully Custom / Bare-Metal
+6. **Start the stack:**
+   ```bash
+   docker compose up -d
+   ```
 
-You are not bound to Docker. You can:
-1. Compile the Go backend (`cd backend && go build -o main .`) and run it as a systemd service.
-2. Build the React frontend (`cd frontend && npm install && npm run build`) and serve the generated static files directly from your web server of choice.
-3. Configure your reverse proxy to route `/api` requests to the Go backend, and the rest to your frontend build directory.
+7. **Open Aeterna:**
+   - http://localhost:5000
+
+If you prefer Docker Hub, replace image names with:
+- `docker.io/alpyxn/aeterna-backend:main`
+- `docker.io/alpyxn/aeterna-frontend:main`
 
 ### Installation Modes
 
@@ -158,20 +233,6 @@ The installer guides you through basic configuration:
 **SMTP Settings** (required for sending emails) are configured post-installation through the application's **Settings** menu. This allows for live testing and easier management.
 
 
-
-## Docker Images (GHCR)
-
-```bash
-docker pull ghcr.io/alpyxn/aeterna-backend:main
-docker pull ghcr.io/alpyxn/aeterna-frontend:main
-```
-
-## Docker Images (Docker Hub)
-
-```bash
-docker pull docker.io/alpyxn/aeterna-backend:main
-docker pull docker.io/alpyxn/aeterna-frontend:main
-```
 
 ## Security
 
