@@ -139,19 +139,20 @@
                             <span class="dot red"></span>
                             <span class="dot yellow"></span>
                             <span class="dot green"></span>
-                            <span class="terminal-title">Manual Docker</span>
+                            <span class="terminal-title">Docker Compose (Published Images)</span>
                         </div>
                         <div class="terminal-body">
-                            <code><span class="comment"># 1. Generate encryption key</span></code>
-                            <code><span class="prompt">$</span> mkdir -p secrets</code>
+                            <code><span class="comment"># Deploy from registry images</span></code>
+                            <code><span class="prompt">$</span> mkdir -p aeterna && cd aeterna</code>
+                            <code><span class="prompt">$</span> mkdir -p data secrets</code>
                             <code><span class="prompt">$</span> openssl rand -base64 32 | tr -d '\n' > secrets/encryption_key</code>
                             <code><span class="prompt">$</span> chmod 600 secrets/encryption_key</code>
                             <br>
-                            <code><span class="comment"># 2. Configure environment</span></code>
-                            <code><span class="prompt">$</span> cp .env.production.example .env && nano .env</code>
+                            <code><span class="comment"># Create .env, docker-compose.yml (ghcr.io/alpyxn/*:main),</span></code>
+                            <code><span class="comment"># and proxy-simple.conf — copy-paste templates in README (Manual Installation).</span></code>
                             <br>
-                            <code><span class="comment"># 3. Start services (Exposes 127.0.0.1:8080 & 127.0.0.1:8081)</span></code>
-                            <code><span class="prompt">$</span> docker compose -f docker-compose.proxy.yml up -d</code>
+                            <code><span class="prompt">$</span> docker compose up -d</code>
+                            <code><span class="comment"># → http://localhost:5000 · Docker Hub: docker.io/alpyxn/*:main</span></code>
                         </div>
                     </div>
                 </div>
