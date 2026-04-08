@@ -29,21 +29,9 @@ func Start() {
 }
 
 func checkReminders() {
-	settings, err := settingsService.Get()
-	if err != nil || settings.OwnerEmail == "" || settings.SMTPHost == "" {
-		return // No owner email or SMTP configured
-	}
-
 	var reminders []models.MessageReminder
 
-	// Find unsent reminders for active messages where the time remaining until trigger
-	// is less than or equal to the reminder's MinutesBefore.
-	// trigger_time = last_seen + trigger_duration
-	// remaining_time = trigger_time - now
-	// We want: remaining_time <= minutes_before
-	// which is: last_seen + trigger_duration - now <= minutes_before
-	// or: now >= last_seen + trigger_duration - minutes_before
-	err = database.DB.Table("message_reminders").
+	err := database.DB.Table("message_reminders").
 		Select("message_reminders.*").
 		Joins("JOIN messages ON messages.id = message_reminders.message_id").
 		Where("messages.status = ?", models.StatusActive).
@@ -58,14 +46,21 @@ func checkReminders() {
 
 	for _, req := range reminders {
 		var msg models.Message
-		if err := database.DB.First(&msg, "id = ?", req.MessageID).Error; err == nil {
-			sendReminderEmail(settings, msg, req)
+		if err := database.DB.First(&msg, "id = ?", req.MessageID).Error; err != nil {
+			continue
 		}
+		if msg.UserID == "" {
+			continue
+		}
+		settings, err := settingsService.Get(msg.UserID)
+		if err != nil || settings.OwnerEmail == "" || settings.SMTPHost == "" {
+			continue
+		}
+		sendReminderEmail(settings, msg, req)
 	}
 }
 
 func sendReminderEmail(settings models.Settings, msg models.Message, reminder models.MessageReminder) {
-	// Calculate remaining time
 	lastSeen := msg.LastSeen
 	triggerTime := lastSeen.Add(time.Duration(msg.TriggerDuration) * time.Minute)
 	remaining := time.Until(triggerTime)
@@ -80,7 +75,6 @@ func sendReminderEmail(settings models.Settings, msg models.Message, reminder mo
 		remainingStr = fmt.Sprintf("%.0f minute(s)", remaining.Minutes())
 	}
 
-	// Build quick heartbeat link
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
 		baseURL = "http://localhost:5173"
@@ -104,7 +98,6 @@ Sent by Aeterna`, remainingStr, formatRecipients(msg.RecipientEmail), quickLink)
 		return
 	}
 
-	// Mark specific reminder as sent
 	database.DB.Model(&reminder).Update("sent", true)
 	slog.Info("Reminder email sent", "owner", settings.OwnerEmail, "message_id", msg.ID, "minutes_before", reminder.MinutesBefore)
 }
@@ -112,7 +105,6 @@ Sent by Aeterna`, remainingStr, formatRecipients(msg.RecipientEmail), quickLink)
 func checkHeartbeats() {
 	var messages []models.Message
 
-	// Find active messages where last_seen + trigger_duration < now
 	err := database.DB.Where(
 		"status = ? AND datetime(last_seen, '+' || CAST(trigger_duration AS TEXT) || ' minutes') < datetime('now')",
 		models.StatusActive,
@@ -123,6 +115,9 @@ func checkHeartbeats() {
 	}
 
 	for _, msg := range messages {
+		if msg.UserID == "" {
+			continue
+		}
 		triggerSwitch(msg)
 	}
 }
@@ -130,14 +125,19 @@ func checkHeartbeats() {
 func triggerSwitch(msg models.Message) {
 	slog.Warn("Switch triggered", "recipient", formatRecipients(msg.RecipientEmail), "id", msg.ID)
 
-	// Load file attachments
+	settings, err := settingsService.Get(msg.UserID)
+	if err != nil {
+		slog.Error("Failed to load SMTP settings", "error", err, "user_id", msg.UserID)
+		settings = models.Settings{}
+	}
+
 	var emailAttachments []services.EmailAttachment
-	attachments, err := workerFileService.ListByMessageID(msg.ID)
+	attachments, err := workerFileService.ListByMessageID(msg.UserID, msg.ID)
 	if err != nil {
 		slog.Error("Failed to load attachments", "error", err, "message_id", msg.ID)
 	} else {
 		for _, att := range attachments {
-			filename, mimeType, data, err := workerFileService.GetDecrypted(att.ID)
+			filename, mimeType, data, err := workerFileService.GetDecrypted(msg.UserID, att.ID)
 			if err != nil {
 				slog.Error("Failed to decrypt attachment", "error", err, "attachment_id", att.ID)
 				continue
@@ -150,12 +150,7 @@ func triggerSwitch(msg models.Message) {
 		}
 	}
 
-	// Get SMTP settings
-	settings, err := settingsService.Get()
-	if err != nil {
-		slog.Error("Failed to load SMTP settings", "error", err)
-	} else if settings.SMTPHost != "" {
-		// Send real email with content and attachments
+	if settings.SMTPHost != "" {
 		err := emailService.SendTriggeredMessage(settings, msg, emailAttachments)
 		if err != nil {
 			slog.Error("Failed to send email", "error", err, "recipient", formatRecipients(msg.RecipientEmail))
@@ -163,10 +158,10 @@ func triggerSwitch(msg models.Message) {
 			slog.Info("Email sent successfully", "recipient", formatRecipients(msg.RecipientEmail), "attachments", len(emailAttachments))
 		}
 	} else {
-		slog.Info("Mock email", "recipient", formatRecipients(msg.RecipientEmail), "content", msg.Content, "attachments", len(emailAttachments))
+		slog.Info("Mock email", "recipient", formatRecipients(msg.RecipientEmail), "attachments", len(emailAttachments))
 	}
 
-	webhooks, err := webhookStore.ListEnabled()
+	webhooks, err := webhookStore.ListEnabledForUser(msg.UserID)
 	if err != nil {
 		slog.Error("Failed to load webhooks", "error", err)
 	} else if len(webhooks) > 0 {
@@ -178,20 +173,17 @@ func triggerSwitch(msg models.Message) {
 		}
 	}
 
-	// Update Status
 	msg.Status = models.StatusTriggered
 	database.DB.Save(&msg)
 
-	// Clean up attachment files from disk after successful trigger
 	if len(attachments) > 0 {
-		if err := workerFileService.DeleteByMessageID(msg.ID); err != nil {
+		if err := workerFileService.DeleteByMessageID(msg.UserID, msg.ID); err != nil {
 			slog.Error("Failed to clean up attachments", "error", err, "message_id", msg.ID)
 		} else {
 			slog.Info("Attachments cleaned up", "message_id", msg.ID, "count", len(attachments))
 		}
 	}
 
-	// Notify owner that the message was delivered
 	if settings.OwnerEmail != "" && settings.SMTPHost != "" {
 		sendOwnerNotification(settings, msg, webhooks)
 	}

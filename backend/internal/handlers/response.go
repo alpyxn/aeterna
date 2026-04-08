@@ -8,6 +8,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+func currentUserID(c *fiber.Ctx) (string, error) {
+	uid, ok := c.Locals("user_id").(string)
+	if !ok || uid == "" {
+		return "", services.NewAPIError(401, "unauthorized", "Unauthorized", nil)
+	}
+	return uid, nil
+}
+
 func writeError(c *fiber.Ctx, err error) error {
 	var apiErr *services.APIError
 	if errors.As(err, &apiErr) {

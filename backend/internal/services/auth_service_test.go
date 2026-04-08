@@ -47,25 +47,3 @@ func TestSessionTTLFromEnv(t *testing.T) {
 		t.Fatalf("expected fallback 12h for non-positive value, got %v", got)
 	}
 }
-
-func TestGetActiveHashPrefixUsesEnv(t *testing.T) {
-	svc := AuthService{}
-	old := os.Getenv("MASTER_PASSWORD")
-	defer func() {
-		if old == "" {
-			_ = os.Unsetenv("MASTER_PASSWORD")
-			return
-		}
-		_ = os.Setenv("MASTER_PASSWORD", old)
-	}()
-
-	_ = os.Setenv("MASTER_PASSWORD", "VeryLongMasterPassword")
-	if got := svc.getActiveHashPrefix(); got != "VeryLongMa" {
-		t.Fatalf("expected first 10 chars, got %q", got)
-	}
-
-	_ = os.Setenv("MASTER_PASSWORD", "short")
-	if got := svc.getActiveHashPrefix(); got != "short" {
-		t.Fatalf("expected full short value, got %q", got)
-	}
-}

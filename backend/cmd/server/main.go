@@ -60,14 +60,17 @@ func main() {
 	// Initialize Database
 	database.Connect()
 
-	// Auto Migrate - GORM handles schema creation and updates for SQLite
-	// SQLite doesn't support ALTER TABLE ADD COLUMN IF NOT EXISTS, so we rely on AutoMigrate
-	if err := database.DB.AutoMigrate(&models.Message{}, &models.MessageReminder{}, &models.Settings{}, &models.Webhook{}, &models.Attachment{}); err != nil {
+	if err := database.DB.AutoMigrate(&models.User{}, &models.Message{}, &models.MessageReminder{}, &models.Settings{}, &models.Webhook{}, &models.Attachment{}, &models.ApplicationSettings{}); err != nil {
 		log.Fatal("Failed to migrate database: ", err)
 	}
 
-	// SQLite migration: Update existing records with default values if needed
-	// These are safe operations that work with SQLite
+	if err := database.MigrateLegacyToMultitenant(database.DB); err != nil {
+		log.Fatal("Failed to migrate to multi-tenant schema: ", err)
+	}
+
+	if err := services.EnsureApplicationSettingsRow(); err != nil {
+		log.Fatal("Failed to ensure application settings: ", err)
+	}
 
 	// Ensure key_fragment has default value for existing records
 	database.DB.Exec("UPDATE messages SET key_fragment = 'local' WHERE key_fragment IS NULL OR key_fragment = '';")
@@ -150,6 +153,8 @@ func main() {
 	api.Get("/messages/:id", handlers.GetMessage)
 	api.Get("/setup/status", handlers.SetupStatus)
 	api.Post("/setup", handlers.SetupMasterPassword)
+	api.Post("/auth/register", middleware.AuthRateLimiter, handlers.Register)
+	api.Post("/auth/login", middleware.AuthRateLimiter, handlers.Login)
 
 	// Auth endpoints with brute-force protection
 	api.Post("/auth/verify", middleware.AuthRateLimiter, handlers.VerifyMasterPassword)
@@ -182,6 +187,10 @@ func main() {
 	mgmt.Post("/settings", handlers.SaveSettings)
 	mgmt.Post("/settings/test", handlers.TestSMTP)
 	mgmt.Get("/heartbeat-token", handlers.GetHeartbeatToken)
+
+	// User accounts (primary administrator only; enforced in handlers/services)
+	mgmt.Get("/users", handlers.ListUsers)
+	mgmt.Delete("/users/:id", handlers.DeleteUser)
 
 	// Start Background Worker
 	go worker.Start()

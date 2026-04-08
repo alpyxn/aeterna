@@ -9,6 +9,7 @@ import (
 
 type Attachment struct {
 	ID          string         `gorm:"type:text;primaryKey" json:"id"`
+	UserID      string         `gorm:"type:text;index" json:"-"`
 	MessageID   string         `gorm:"type:text;not null;index" json:"message_id"`
 	Filename    string         `gorm:"not null" json:"filename"`
 	StoragePath string         `gorm:"not null" json:"-"`

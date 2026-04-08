@@ -31,20 +31,16 @@ func Connect() {
 		}
 	}
 
+	// DSN query params apply to every new connection in the pool (unlike one-shot PRAGMAs).
+	// busy_timeout: writers wait (ms) when another writer holds the lock — important for multi-user HTTP handlers.
+	// journal_mode=WAL: readers do not block the writer; multiple readers + one writer at a time.
+	// _foreign_keys: enforce FK constraints on each connection.
+	dsn := dbPath + "?_busy_timeout=10000&_journal_mode=WAL&_foreign_keys=1"
+
 	var err error
-	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	DB, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatal("Failed to connect to SQLite database at ", dbPath, ": ", err)
-	}
-
-	// Enable foreign keys for SQLite
-	if err := DB.Exec("PRAGMA foreign_keys = ON;").Error; err != nil {
-		log.Fatal("Failed to enable foreign keys: ", err)
-	}
-
-	// Enable WAL mode for better concurrent access
-	if err := DB.Exec("PRAGMA journal_mode = WAL;").Error; err != nil {
-		log.Println("Warning: Failed to enable WAL mode:", err)
 	}
 
 	log.Println("Database connection successfully opened:", dbPath)

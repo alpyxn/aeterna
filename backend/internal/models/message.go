@@ -16,6 +16,7 @@ const (
 
 type Message struct {
 	ID              string            `gorm:"type:text;primaryKey" json:"id"`
+	UserID          string            `gorm:"type:text;index" json:"-"`
 	Content         string            `gorm:"column:encrypted_content;not null" json:"content"`
 	KeyFragment     string            `gorm:"column:key_fragment;not null" json:"-"`
 	ManagementToken string            `gorm:"column:management_token;not null" json:"-"`

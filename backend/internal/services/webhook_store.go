@@ -15,9 +15,9 @@ import (
 
 type WebhookStore struct{}
 
-func (s WebhookStore) List() ([]models.Webhook, error) {
+func (s WebhookStore) List(userID string) ([]models.Webhook, error) {
 	var items []models.Webhook
-	if err := database.DB.Order("created_at ASC").Find(&items).Error; err != nil {
+	if err := database.ForTenant(userID).Order("created_at ASC").Find(&items).Error; err != nil {
 		return nil, Internal("Failed to fetch webhooks", err)
 	}
 	for i := range items {
@@ -26,15 +26,15 @@ func (s WebhookStore) List() ([]models.Webhook, error) {
 	return items, nil
 }
 
-func (s WebhookStore) ListEnabled() ([]models.Webhook, error) {
+func (s WebhookStore) ListEnabledForUser(userID string) ([]models.Webhook, error) {
 	var items []models.Webhook
-	if err := database.DB.Where("enabled = ?", true).Find(&items).Error; err != nil {
+	if err := database.ForTenant(userID).Where("enabled = ?", true).Find(&items).Error; err != nil {
 		return nil, Internal("Failed to fetch webhooks", err)
 	}
 	return items, nil
 }
 
-func (s WebhookStore) Create(item models.Webhook) (models.Webhook, error) {
+func (s WebhookStore) Create(userID string, item models.Webhook) (models.Webhook, error) {
 	item.URL = strings.TrimSpace(item.URL)
 	if item.URL == "" {
 		return models.Webhook{}, BadRequest("Webhook URL is required", nil)
@@ -52,6 +52,7 @@ func (s WebhookStore) Create(item models.Webhook) (models.Webhook, error) {
 		}
 		item.Secret = encrypted
 	}
+	item.UserID = userID
 	if err := database.DB.Create(&item).Error; err != nil {
 		return models.Webhook{}, Internal("Failed to create webhook", err)
 	}
@@ -59,13 +60,13 @@ func (s WebhookStore) Create(item models.Webhook) (models.Webhook, error) {
 	return item, nil
 }
 
-func (s WebhookStore) Update(id string, input models.Webhook) (models.Webhook, error) {
+func (s WebhookStore) Update(userID, id string, input models.Webhook) (models.Webhook, error) {
 	parsedID, err := strconv.Atoi(id)
 	if err != nil {
 		return models.Webhook{}, BadRequest("Invalid webhook id", err)
 	}
 	var existing models.Webhook
-	if err := database.DB.First(&existing, parsedID).Error; err != nil {
+	if err := database.ForTenant(userID).First(&existing, parsedID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return models.Webhook{}, NotFound("Webhook not found", err)
 		}
@@ -101,12 +102,12 @@ func (s WebhookStore) Update(id string, input models.Webhook) (models.Webhook, e
 	return existing, nil
 }
 
-func (s WebhookStore) Delete(id string) error {
+func (s WebhookStore) Delete(userID, id string) error {
 	parsedID, err := strconv.Atoi(id)
 	if err != nil {
 		return BadRequest("Invalid webhook id", err)
 	}
-	if err := database.DB.Delete(&models.Webhook{}, parsedID).Error; err != nil {
+	if err := database.ForTenant(userID).Where("id = ?", parsedID).Delete(&models.Webhook{}).Error; err != nil {
 		return Internal("Failed to delete webhook", err)
 	}
 	return nil

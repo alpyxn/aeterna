@@ -1,8 +1,9 @@
 package models
 
-// Settings is the database model - sensitive fields hidden in JSON responses
+// Settings is per-tenant configuration (one row per user).
 type Settings struct {
 	ID                 uint   `gorm:"primaryKey"`
+	UserID             string `gorm:"type:text;uniqueIndex" json:"-"`
 	SMTPHost           string `gorm:"column:smtp_host" json:"smtp_host"`
 	SMTPPort           string `gorm:"column:smtp_port" json:"smtp_port"`
 	SMTPUser           string `gorm:"column:smtp_user" json:"smtp_user"`
@@ -30,6 +31,8 @@ type SettingsRequest struct {
 	WebhookSecret  string `json:"webhook_secret"` // Accepted from API requests
 	WebhookEnabled bool   `json:"webhook_enabled"`
 	OwnerEmail     string `json:"owner_email"`
+	// AllowRegistration: only the primary (first) user may set this; persisted in application_settings.
+	AllowRegistration *bool `json:"allow_registration,omitempty"`
 }
 
 // ToSettings converts SettingsRequest to Settings model

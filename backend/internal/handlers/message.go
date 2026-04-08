@@ -8,11 +8,11 @@ import (
 )
 
 type CreateMessageRequest struct {
-	Content         string `json:"content"`
-	RecipientEmail  string `json:"recipient_email"`
+	Content         string   `json:"content"`
+	RecipientEmail  string   `json:"recipient_email"`
 	RecipientEmails []string `json:"recipient_emails"`
-	TriggerDuration int    `json:"trigger_duration"` // in minutes
-	Reminders       []int  `json:"reminders"`        // minutes before trigger
+	TriggerDuration int      `json:"trigger_duration"`
+	Reminders       []int    `json:"reminders"`
 }
 
 type HeartbeatRequest struct {
@@ -22,6 +22,10 @@ type HeartbeatRequest struct {
 var messageService = services.MessageService{}
 
 func CreateMessage(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
 	req := new(CreateMessageRequest)
 	if err := c.BodyParser(req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
@@ -32,7 +36,7 @@ func CreateMessage(c *fiber.Ctx) error {
 		recipients = []string{strings.TrimSpace(req.RecipientEmail)}
 	}
 
-	msg, err := messageService.Create(req.Content, recipients, req.TriggerDuration, req.Reminders)
+	msg, err := messageService.Create(userID, req.Content, recipients, req.TriggerDuration, req.Reminders)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -70,9 +74,10 @@ func normalizeRecipients(recipients []string) []string {
 	return normalized
 }
 
+// GetMessage is public: reveal content only when message is triggered (unchanged contract).
 func GetMessage(c *fiber.Ctx) error {
 	id := c.Params("id")
-	msg, err := messageService.GetByID(id)
+	msg, err := messageService.GetPublicByID(id)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -90,12 +95,16 @@ func GetMessage(c *fiber.Ctx) error {
 }
 
 func Heartbeat(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
 	req := new(HeartbeatRequest)
 	if err := c.BodyParser(req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
 
-	msg, err := messageService.Heartbeat(req.ID)
+	msg, err := messageService.Heartbeat(userID, req.ID)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -104,7 +113,11 @@ func Heartbeat(c *fiber.Ctx) error {
 }
 
 func ListMessages(c *fiber.Ctx) error {
-	messages, err := messageService.List()
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
+	messages, err := messageService.List(userID)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -112,22 +125,30 @@ func ListMessages(c *fiber.Ctx) error {
 }
 
 func DeleteMessage(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
 	id := c.Params("id")
-	if err := messageService.Delete(id); err != nil {
+	if err := messageService.Delete(userID, id); err != nil {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true, "message": "Message deleted successfully"})
 }
 
 type UpdateMessageRequest struct {
-	Content         string `json:"content"`
-	RecipientEmail  string `json:"recipient_email"`
+	Content         string   `json:"content"`
+	RecipientEmail  string   `json:"recipient_email"`
 	RecipientEmails []string `json:"recipient_emails"`
-	TriggerDuration int    `json:"trigger_duration"`
-	Reminders       []int  `json:"reminders"`
+	TriggerDuration int      `json:"trigger_duration"`
+	Reminders       []int    `json:"reminders"`
 }
 
 func UpdateMessage(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
 	id := c.Params("id")
 	req := new(UpdateMessageRequest)
 	if err := c.BodyParser(req); err != nil {
@@ -139,7 +160,7 @@ func UpdateMessage(c *fiber.Ctx) error {
 		recipients = []string{strings.TrimSpace(req.RecipientEmail)}
 	}
 
-	msg, err := messageService.Update(id, req.Content, recipients, req.TriggerDuration, req.Reminders)
+	msg, err := messageService.Update(userID, id, req.Content, recipients, req.TriggerDuration, req.Reminders)
 	if err != nil {
 		return writeError(c, err)
 	}

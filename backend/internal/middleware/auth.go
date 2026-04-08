@@ -14,10 +14,12 @@ var authService = services.AuthService{}
 
 func MasterAuth(c *fiber.Ctx) error {
 	if token := c.Cookies("aeterna_session"); token != "" {
-		if err := authService.VerifySessionToken(token); err == nil {
+		userID, err := authService.VerifySessionToken(token)
+		if err == nil {
 			if err := enforceOriginAllowlist(c); err != nil {
 				return err
 			}
+			c.Locals("user_id", userID)
 			return c.Next()
 		}
 		c.ClearCookie("aeterna_session")
@@ -33,18 +35,14 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 	origin := strings.TrimSpace(c.Get("Origin"))
 	allowedOrigins := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
 
-	// Debug logging (only in non-production)
 	if os.Getenv("ENV") != "production" {
 		slog.Info("Origin check", "origin", origin, "allowed", allowedOrigins, "referer", c.Get("Referer"))
 	}
 
-	// Support wildcard for simple/testing mode - check first!
 	if allowedOrigins == "*" {
 		return nil
 	}
 
-	// Same-origin requests may not send Origin header
-	// In that case, check Referer or allow the request
 	if origin == "" {
 		referer := strings.TrimSpace(c.Get("Referer"))
 		if referer != "" {
@@ -55,7 +53,6 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 		}
 	}
 
-	// If still no origin (same-origin fetch, curl, etc.), allow in development
 	if origin == "" {
 		env := os.Getenv("ENV")
 		if env != "production" {
@@ -80,12 +77,15 @@ func enforceOriginAllowlist(c *fiber.Ctx) error {
 	}
 
 	for _, entry := range strings.Split(allowedOrigins, ",") {
-		if strings.TrimSpace(entry) == origin {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if origin == entry {
 			return nil
 		}
 	}
 
-	slog.Warn("Origin not allowed", "origin", origin, "allowed", allowedOrigins)
 	return c.Status(403).JSON(fiber.Map{
 		"error": "Origin not allowed",
 		"code":  "origin_not_allowed",

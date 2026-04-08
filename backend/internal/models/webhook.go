@@ -4,6 +4,7 @@ import "time"
 
 type Webhook struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    string    `gorm:"type:text;index" json:"-"`
 	URL       string    `gorm:"not null" json:"url"`
 	Secret    string    `gorm:"not null" json:"secret"`
 	Enabled   bool      `gorm:"default:1" json:"enabled"`

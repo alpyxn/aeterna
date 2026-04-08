@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"crypto/subtle"
 	"time"
 
 	"github.com/alpyxn/aeterna/backend/internal/database"
@@ -14,40 +13,31 @@ import (
 var settingsService = services.SettingsService{}
 
 // QuickHeartbeat handles heartbeat via token link (no auth required)
-// GET: Shows a page with a button to send heartbeat
-// POST: Actually triggers the heartbeat
 func QuickHeartbeat(c *fiber.Ctx) error {
 	token := c.Params("token")
 	if token == "" {
 		return c.Status(400).JSON(fiber.Map{"error": "Token required"})
 	}
 
-	// Get settings and verify token
-	settings, err := settingsService.Get()
+	settings, err := settingsService.GetByHeartbeatToken(token)
 	if err != nil {
 		return writeError(c, err)
 	}
 
-	if settings.HeartbeatToken == "" || subtle.ConstantTimeCompare([]byte(settings.HeartbeatToken), []byte(token)) != 1 {
-		return c.Status(403).JSON(fiber.Map{"error": "Invalid token"})
-	}
+	userID := settings.UserID
 
-	// Handle POST request - trigger heartbeat
 	if c.Method() == "POST" {
-		// Execute both updates within a single transaction to ensure data consistency
 		err = database.DB.Transaction(func(tx *gorm.DB) error {
 			now := time.Now().UTC()
 
-			// 1. Update all active messages
-			if err := tx.Model(&models.Message{}).
+			if err := database.TenantTx(tx, userID).Model(&models.Message{}).
 				Where("status = ?", models.StatusActive).
 				Update("last_seen", now).Error; err != nil {
 				return err
 			}
 
-			// 2. Reset sent statuses for reminders associated with active messages
 			if err := tx.Model(&models.MessageReminder{}).
-				Where("message_id IN (SELECT id FROM messages WHERE status = ?)", models.StatusActive).
+				Where("message_id IN (SELECT id FROM messages WHERE user_id = ? AND status = ?)", userID, models.StatusActive).
 				Update("sent", false).Error; err != nil {
 				return err
 			}
@@ -59,7 +49,6 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 			return writeError(c, services.Internal("Failed to update heartbeats", err))
 		}
 
-		// Return success HTML page
 		html := `<!DOCTYPE html>
 <html>
 <head>
@@ -100,7 +89,6 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 		return c.SendString(html)
 	}
 
-	// Handle GET request - show page with button
 	html := `<!DOCTYPE html>
 <html>
 <head>
@@ -229,7 +217,11 @@ func QuickHeartbeat(c *fiber.Ctx) error {
 
 // GetHeartbeatToken returns the heartbeat token for authenticated users
 func GetHeartbeatToken(c *fiber.Ctx) error {
-	settings, err := settingsService.Get()
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
+	settings, err := settingsService.Get(userID)
 	if err != nil {
 		return writeError(c, err)
 	}

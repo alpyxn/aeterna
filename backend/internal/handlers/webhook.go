@@ -15,7 +15,11 @@ type webhookRequest struct {
 var webhookStore = services.WebhookStore{}
 
 func ListWebhooks(c *fiber.Ctx) error {
-	items, err := webhookStore.List()
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
+	items, err := webhookStore.List(userID)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -23,6 +27,10 @@ func ListWebhooks(c *fiber.Ctx) error {
 }
 
 func CreateWebhook(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
 	var req webhookRequest
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
@@ -32,7 +40,7 @@ func CreateWebhook(c *fiber.Ctx) error {
 		Secret:  req.Secret,
 		Enabled: req.Enabled,
 	}
-	created, err := webhookStore.Create(item)
+	created, err := webhookStore.Create(userID, item)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -40,6 +48,10 @@ func CreateWebhook(c *fiber.Ctx) error {
 }
 
 func UpdateWebhook(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
 	id := c.Params("id")
 	var req webhookRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -50,7 +62,7 @@ func UpdateWebhook(c *fiber.Ctx) error {
 		Secret:  req.Secret,
 		Enabled: req.Enabled,
 	}
-	updated, err := webhookStore.Update(id, item)
+	updated, err := webhookStore.Update(userID, id, item)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -58,8 +70,12 @@ func UpdateWebhook(c *fiber.Ctx) error {
 }
 
 func DeleteWebhook(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
 	id := c.Params("id")
-	if err := webhookStore.Delete(id); err != nil {
+	if err := webhookStore.Delete(userID, id); err != nil {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true})

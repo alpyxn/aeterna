@@ -13,9 +13,9 @@ import (
 
 type SettingsService struct{}
 
-func (s SettingsService) Get() (models.Settings, error) {
+func (s SettingsService) Get(userID string) (models.Settings, error) {
 	var settings models.Settings
-	result := database.DB.First(&settings)
+	result := database.DB.Where("user_id = ?", userID).First(&settings)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return models.Settings{}, nil
@@ -39,7 +39,20 @@ func (s SettingsService) Get() (models.Settings, error) {
 	return settings, nil
 }
 
-func (s SettingsService) Save(req models.Settings) error {
+// GetByHeartbeatToken resolves settings for the quick-heartbeat public link.
+func (s SettingsService) GetByHeartbeatToken(token string) (models.Settings, error) {
+	var settings models.Settings
+	result := database.DB.Where("heartbeat_token = ?", token).First(&settings)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return models.Settings{}, NewAPIError(403, "forbidden", "Invalid token", nil)
+		}
+		return models.Settings{}, Internal("Failed to fetch settings", result.Error)
+	}
+	return settings, nil
+}
+
+func (s SettingsService) Save(userID string, req models.Settings) error {
 	req.WebhookURL = strings.TrimSpace(req.WebhookURL)
 	if req.WebhookEnabled && req.WebhookURL == "" {
 		return BadRequest("Webhook URL is required", nil)
@@ -65,11 +78,13 @@ func (s SettingsService) Save(req models.Settings) error {
 		}
 		req.WebhookSecret = encrypted
 	}
+
+	req.UserID = userID
+
 	var existing models.Settings
-	result := database.DB.First(&existing)
+	result := database.DB.Where("user_id = ?", userID).First(&existing)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			req.ID = 1
 			if err := database.DB.Create(&req).Error; err != nil {
 				return Internal("Failed to save settings", err)
 			}
@@ -81,14 +96,12 @@ func (s SettingsService) Save(req models.Settings) error {
 	existing.SMTPHost = req.SMTPHost
 	existing.SMTPPort = req.SMTPPort
 	existing.SMTPUser = req.SMTPUser
-	// Only update password if a new one is provided
 	if req.SMTPPass != "" {
 		existing.SMTPPass = req.SMTPPass
 	}
 	existing.SMTPFrom = req.SMTPFrom
 	existing.SMTPFromName = req.SMTPFromName
 	existing.WebhookURL = req.WebhookURL
-	// Only update webhook secret if a new one is provided
 	if req.WebhookSecret != "" {
 		existing.WebhookSecret = req.WebhookSecret
 	}
@@ -144,10 +157,8 @@ func (s SettingsService) TestSMTP(req models.Settings) error {
 	}
 	defer client.Close()
 
-	// Try PLAIN auth first, then LOGIN auth as fallback (for Yandex and others)
 	auth := smtp.PlainAuth("", req.SMTPUser, req.SMTPPass, req.SMTPHost)
 	if err := client.Auth(auth); err != nil {
-		// Try LOGIN auth as fallback
 		loginAuth := LoginAuth(req.SMTPUser, req.SMTPPass)
 		if loginErr := client.Auth(loginAuth); loginErr != nil {
 			return BadRequest("Authentication failed", err)
