@@ -121,9 +121,9 @@ cd aeterna
 
  注意事项:
   - 如果你使用域名，请相应设置：
-    - ‘ALLOWED_ORIGINS=**https://你的域名**’
-    - 、BASE_URL=**https://你的域名**’
-  - ALLOWED_ORIGINS 必须包含浏览器地址栏中显示的完整源（协议 + 主机 + 端口）。
+    - `ALLOWED_ORIGINS=https://你的域名`
+    - `BASE_URL=https://你的域名`
+  - `ALLOWED_ORIGINS` 必须包含浏览器地址栏中显示的完整源（协议 + 主机 + 端口）。
 
 
 4. **创建使用镜像仓库的 docker-compose.yml：**
@@ -206,7 +206,7 @@ cd aeterna
    }
    ```
 
-6. **启动服务栈：**
+6. **启动服务：**
    ```bash
    docker compose up -d
    ```
