@@ -121,8 +121,8 @@ cd aeterna
 
  注意事项:
   - 如果你使用域名，请相应设置：
-    - ALLOWED_ORIGINS=https://你的域名
-    - BASE_URL=https://你的域名
+    - ALLOWED_ORIGINS=**https://你的域名**
+    - BASE_URL=**https://你的域名**
   - ALLOWED_ORIGINS 必须包含浏览器地址栏中显示的完整源（协议 + 主机 + 端口）。
 
 
