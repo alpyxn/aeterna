@@ -1,5 +1,6 @@
 # Aeterna（永恒）
 **中文丨[English](README.md)**
+
 ***中文内容翻译进行中***
 <p align="center">
   <img src="assets/hero.png" alt="Aeterna 永恒" width="600">
