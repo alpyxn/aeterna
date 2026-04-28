@@ -1,7 +1,7 @@
-# Aeterna（永恒）
+# Aeterna
 
 <p align="center">
-  <img src="assets/hero.png" alt="Aeterna 永恒" width="600">
+  <img src="assets/hero.png" alt="Aeterna Logo" width="600">
 </p>
 
 <p align="center">
@@ -9,63 +9,63 @@
   <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React">
   <img src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite">
   <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker">
-  <img src="https://img.shields.io/badge/许可证-GPL--3.0-blue?style=flat-square" alt="GPL-3.0 许可证">
+  <img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="GPL-3.0 License">
 </p>
 
-## 目录
-- [核心功能](#核心功能)
-- [界面截图](#界面截图)
-- [快速开始](#快速开始)
-- [管理与维护](#管理与维护)
-- [配置说明](#配置说明)
-- [反向代理模板](#反向代理模板)
-- [安全性](#安全性)
-- [架构设计](#架构设计)
-- [项目结构](#项目结构)
-- [免责声明](#免责声明)
-- [支持项目](#支持项目)
-- [许可证](#许可证)
+## Table of Contents
+- [Key Features](#key-features)
+- [Screenshots](#screenshots)
+- [Quick Start](#quick-start)
+- [Management](#management)
+- [Configuration](#configuration)
+- [Reverse Proxy Templates](#reverse-proxy-templates)
+- [Security](#security)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Disclaimer](#disclaimer)
+- [Support](#support)
+- [License](#license)
 
 
-*"你会为这个世界留下什么话？"*
+*"What words would you leave behind?"*
 
 ---
 
-'Aeterna 永恒'是一个"赛博遗嘱"。你留下消息，定期"签到"证明你还在。若你停止签到，你的消息便会被递送出去。
+Aeterna is a dead man's switch. You write messages. You check in regularly. If you stop checking in, your messages are delivered.
 
-如此简单，却又如此重要。
+It's that simple. And that important.
 
-永恒替你保管这些话语。它静候、它等待。当那一刻来临时，它负责递送。
+Aeterna holds these words. It watches. It waits. And when the time comes, it delivers.
 
-## 核心功能
+## Key Features
 
-- **邮件递送**：若你未能按时签到，系统会自动将你的消息与文件递送给指定收件人。
-- **Webhook集成**：当开关触发时，可联动外部服务（如家庭自动化、自定义脚本等）。
-- **文件附件**：可为开关安全地附加敏感文档、照片或说明。
-- **自动清理**：为最大限度保护隐私，附件在成功递送后会立即从服务器上删除。
-- **一键安装**：提供全面的安装向导。
-- **心跳系统**：可通过网页界面或邮件中的快捷链接轻松完成签到。
-- **隐私优先架构**：消息与附件在你的私有服务器上以静态加密（AES-256-GCM）形式存储，仅在递送时刻解密。
+- **Email Delivery**: Automatic delivery of your messages and files to your loved ones if you fail to check in.
+- **Webhook Integration**: Trigger external services (home automation, custom scripts, etc.) when your switch is activated.
+- **File Attachments**: Securely attach sensitive documents, photos, or instructions to your switches.
+- **Auto-Cleanup**: Attachments are automatically deleted from the server immediately after delivery for maximum privacy.
+- **One-Click Install**: Comprehensive installation wizard.
+- **Heartbeat System**: Simple check-in mechanism via web UI or a quick-link from your email.
+- **Privacy-Focused Architecture**: Messages and attachments are encrypted at rest (AES-256-GCM) on your private server, ensuring they are only decrypted at the moment of delivery.
 
-## 界面截图
+## Screenshots
 
 <p align="center">
   <table>
     <tr>
       <td align="center" style="padding: 12px;">
         <a href="assets/screenshots/dashboard.png" target="_blank">
-          <img src="assets/screenshots/dashboard.png" alt="仪表盘" width="280">
-        </a><br><sub><b>仪表盘</b></sub>
+          <img src="assets/screenshots/dashboard.png" alt="Dashboard" width="280">
+        </a><br><sub><b>Dashboard</b></sub>
       </td>
       <td align="center" style="padding: 12px;">
         <a href="assets/screenshots/creatingswitch.png" target="_blank">
-          <img src="assets/screenshots/creatingswitch.png" alt="创建开关" width="280">
-        </a><br><sub><b>创建开关</b></sub>
+          <img src="assets/screenshots/creatingswitch.png" alt="Creating a Switch" width="280">
+        </a><br><sub><b>Creating a Switch</b></sub>
       </td>
       <td align="center" style="padding: 12px;">
         <a href="assets/screenshots/settings.png" target="_blank">
-          <img src="assets/screenshots/settings.png" alt="设置" width="280">
-        </a><br><sub><b>设置</b></sub>
+          <img src="assets/screenshots/settings.png" alt="Settings" width="280">
+        </a><br><sub><b>Settings</b></sub>
       </td>
     </tr>
   </table>
@@ -73,7 +73,7 @@
 
 
 
-## 快速开始
+## Quick Start
 
 ```bash
 git clone https://github.com/alpyxn/aeterna.git
@@ -81,52 +81,52 @@ cd aeterna
 ./install.sh
 ```
 
-### 手动安装
+### Manual Installation
 
-如果你不希望使用自动化安装脚本，也可以使用我们已发布的 Docker 镜像直接部署 Aeterna。
+If you prefer not to use the automated installation script, you can deploy Aeterna directly with our published Docker images.
 
-#### Docker Compose（使用已发布镜像）
+#### Docker Compose (Published Images)
 
-1. **新建目录并进入：**
+1. **Create a new folder and move into it:**
    ```bash
    mkdir -p aeterna && cd aeterna
    ```
 
-2. **创建所需目录及加密密钥：**
+2. **Create required directories and encryption key:**
    ```bash
    mkdir -p data secrets
    openssl rand -base64 32 | tr -d '\n' > secrets/encryption_key
    chmod 600 secrets/encryption_key
    ```
 
-3. **创建 .env 文件**
+3. **Create `.env`:**
    ```bash
    SERVER_IP="$(curl -4fsS ifconfig.me || curl -4fsS icanhazip.com || true)"
    if [ -z "$SERVER_IP" ]; then
-     echo "无法自动检测公网 IPv4 地址。请手动设置 SERVER_IP" >&2
+     echo "Could not detect public IPv4 automatically. Set SERVER_IP manually." >&2
      exit 1
    fi
 
    cat > .env <<EOF
-   # 推荐使用你的域名，或使用服务器 IP
+   # Use your public domain (recommended) or server IP
    DOMAIN=${SERVER_IP}
    ENV=production
    VITE_API_URL=/api
-   # 必须与浏览器中访问的地址完全一致
+   # Must match exactly what you open in the browser
    ALLOWED_ORIGINS=http://${SERVER_IP}:5000,http://localhost:5000,http://127.0.0.1:5000
    BASE_URL=http://${SERVER_IP}:5000
    PROXY_MODE=simple
    EOF
    ```
 
- 注意事项:
-  - 如果你使用域名，请相应设置：
-    - `ALLOWED_ORIGINS=https://你的域名`
-    - `BASE_URL=https://你的域名`
-  - `ALLOWED_ORIGINS` 必须包含浏览器地址栏中显示的完整源（协议 + 主机 + 端口）。
+  Notes:
+  - If you use a domain, set:
+    - `ALLOWED_ORIGINS=https://your-domain`
+    - `BASE_URL=https://your-domain`
+  - `ALLOWED_ORIGINS` must include the exact origin shown in your browser address bar (scheme + host + port).
 
 
-4. **创建使用镜像仓库的 docker-compose.yml：**
+4. **Create `docker-compose.yml` using package images:**
    ```yaml
    services:
      backend:
@@ -177,7 +177,7 @@ cd aeterna
        driver: bridge
    ```
 
-5. **创建 proxy-simple.conf：**
+5. **Create `proxy-simple.conf`:**
    ```nginx
    server {
        listen 80;
@@ -206,120 +206,117 @@ cd aeterna
    }
    ```
 
-6. **启动服务：**
+6. **Start the stack:**
    ```bash
    docker compose up -d
    ```
 
-7. **打开 Aeterna：**
+7. **Open Aeterna:**
    - http://localhost:5000
 
-如果你更倾向于使用 Docker Hub，请将镜像名称替换为：
+If you prefer Docker Hub, replace image names with:
 - `docker.io/alpyxn/aeterna-backend:main`
 - `docker.io/alpyxn/aeterna-frontend:main`
 
-### 安装模式
+### Installation Modes
 
-在安装过程中，系统会提示你选择一种模式：
+During installation, you will be prompted to choose a mode:
 
-1. **生产模式（反向代理 + SSL）** - *推荐*
-   - 脚本已针对 Nginx 与 Let's Encrypt 的自动配置进行了专门适配。
-   - 你也可以根据需要调整为 Caddy、Apache 或 Traefik。
-   - 包含安全标头与配置。
+1. **Production (Reverse Proxy + SSL)** - *Recommended*
+   - Specifically configured to work with Nginx and Let's Encrypt automatically via the script.
+   - You can also adapt this for Caddy, Apache, or Traefik.
+   - Secure headers and configuration
 
-2. **开发模式（简单模式）** - *不推荐用于生产环境*
-   - 直接在端口 5000 上运行（仅限 IP 地址访问）。
-   - 无加密/SSL - 对敏感数据而言不安全。
-   - 仅适用于本地测试或开发用途。
+2. **Development (Simple)** - *Not Recommended for Production*
+   - Runs directly on port 5000 (IP address only)
+   - **No encryption/SSL** - insecure for sensitive data
+   - Useful only for local testing or development
 
-## 管理与维护
+## Management
 
-install.sh 脚本内置了管理命令：
+The `install.sh` script includes management commands:
 
-| 命令     | 描述        |
+| Command | Description |
 |---------|-------------|
-| `./install.sh --update` | 更新至最新版本 |
-| `./install.sh --backup` | 创建数据与配置的完整备份 |
-| `./install.sh --status` | 检查服务运行状态 |
-| `./install.sh --uninstall` | 移除容器及相关安装文件 |
+| `./install.sh --update` | Update to the latest version |
+| `./install.sh --backup` | Create a full backup of data and config |
+| `./install.sh --status` | Check service health and status |
+| `./install.sh --uninstall` | Remove containers and installation |
 
-## 配置说明
+## Configuration
 
-安装向导会引导你完成基础配置：
-   - 域名：你的域名（申请 SSL 证书所必需）。
-   - 加密：自动生成唯一的 AES-256 密钥。
-     
-   SMTP 设置（发送邮件所必需）需在安装完成后，通过应用程序的设置菜单进行配置。这样便于进行实时测试与更灵活的管理。
+The installer guides you through basic configuration:
+- **Domain**: Your domain name (required for SSL)
+- **Encryption**: Automatically generates a unique AES-256 key
 
-## 反向代理模板
+**SMTP Settings** (required for sending emails) are configured post-installation through the application's **Settings** menu. This allows for live testing and easier management.
 
-以下文档中提供了适用于  **Nginx**, **Traefik**,  **Caddy** 的现成示例：
+## Reverse Proxy Templates
+
+Ready-to-use examples for **Nginx**, **Traefik**, and **Caddy** are available in:
 
 - [`docs/proxy-templates.md`](docs/proxy-templates.md)
 
-该文档还包含必需的 .env 变量（ALLOWED_ORIGINS、BASE_URL）配置说明与部署注意事项。
+This document also includes required `.env` values (`ALLOWED_ORIGINS`, `BASE_URL`) and deployment notes.
 
 
 
-## 安全性
+## Security
 
-Aeterna 已自动处理相关安全事项：
-- **加密**：消息与文件附件使用 AES-256-GCM 算法进行静态加密。
-- **密钥管理**：加密密钥以安全方式生成，并存储在 secrets/encryption_key 文件中。它绝不会暴露在环境变量或配置文件中。
-- **数据清理**：文件附件在成功递送给收件人后，会从磁盘上永久删除。
-- **SSL**：通过 Let's Encrypt 自动管理证书（生产模式下）。
+Aeterna handles security automatically:
+- **Encryption**: Messages and file attachments are encrypted at rest using AES-256-GCM.
+- **Key Management**: The encryption key is generated securely and stored in `secrets/encryption_key`. It is **never** exposed in environment variables or configuration files.
+- **Data Pruning**: File attachments are permanently deleted from the disk after successful delivery to the recipient.
+- **SSL**: Automatic certificate management via Let's Encrypt (in Production mode).
 
-## 架构设计
+## Architecture
 
 ```
-backend/     Go 语言 API 服务端
-frontend/    React 前端应用  
+backend/     Go API server
+frontend/    React application  
 ```
 
-两个组件均可在 Docker 容器中运行，也可以原生运行。存储层使用 SQLite（单文件数据库）。你可以使用任意反向代理（如 Nginx、Caddy、Apache）将它们整合在一起并提供 SSL 服务。
+Both components can run in Docker containers or natively. SQLite is used for storage (single file database). You can use **any reverse proxy** (proxy, caddy, apache) to serve them together and provide SSL.
 
-## 项目结构
+## Project Structure
 
 ```bash
 .
-├── assets/             # 图片与设计资源
-├── backend/            # Go 源代码
-│   ├── cmd/            # 程序入口 (main.go)
-│   └── internal/       # 核心业务逻辑、处理器与服务
-├── frontend/           # React 前端源码
-│   ├── src/            # 组件、页面与钩子函数
-│   └── public/         # Web 静态资源
-├── secrets/            # 加密密钥文件（Git 忽略）
-├── docker-compose.*    # 适用于不同场景的部署配置
-└── install.sh          # 自动化安装脚本
+├── assets/             # Images and design assets
+├── backend/            # Go source code
+│   ├── cmd/            # Entry points (main.go)
+│   └── internal/       # Core business logic, handlers, and services
+├── frontend/           # React frontend source
+│   ├── src/            # Components, pages, and hooks
+│   └── public/         # Static assets for the web
+├── secrets/            # Encryption keys (ignored by git)
+├── docker-compose.*    # Deployment various configurations
+└── install.sh          # Automated installation script
 ```
 
 
-## 免责声明
+## Disclaimer
 
-Aeterna 处理的是敏感数据，且涉及高风险后果（若你停止签到则自动递送）。 **请阅读完整的 [免责声明](disclaimer.md)** ，了解责任限制、你应承担的部署与合规责任，以及本软件不提供的保证。
+Aeterna deals with sensitive data and high-stakes outcomes (automated delivery if you stop checking in). **Read the full [disclaimer](disclaimer.md)** for limitations of liability, your responsibilities for deployment and compliance, and what the software does not guarantee.
 
-## 支持项目
+## Support
 
-💖 支持本项目
+💖 Support the Project
 
-如果你觉得这个项目有用，不妨考虑支持它的开发。每一份贡献都弥足珍贵！
+If you find this project useful, consider supporting its development. Every contribution is greatly appreciated!
 
-
-****请参考原项目****
-https://github.com/alpyxn/aeterna
 | Asset | Network | Address |
 | --- | --- | --- |
-| **Bitcoin (BTC)** | Bitcoin |
-| **Solana (SOL)** | Solana |
-| **USDT** | ERC-20 / BEP-20 |
-| **Monero (XMR)** | Monero |
+| **Bitcoin (BTC)** | Bitcoin | `bc1qtusxvc2agmvz88f5h7avznvrqmgl50tewj7h3u` |
+| **Solana (SOL)** | Solana | `7bJdCSZN8FUDXXUWDWkxjtS5oM6DGah8PQsXv1XomgWf` |
+| **USDT** | ERC-20 / BEP-20 | `0x5102Ca44De2dF3c1f6711a70076EAa3e5f0fD1c8` |
+| **Monero (XMR)** | Monero | `87U6EcarbbWUkVh15DeGSjEVkrhprbGR9ieAzHpYDivVi2WJK64sUWDDSpdqH5UFdDcpKgkXShTvVAFAbPJ4f7YYFvgaAku` |
 
 
-## 许可证
+## License
 
 GPL-3.0
 
 ---
 
-*以拉丁语中意为"永恒"的词汇命名 —— 因为有些话语，注定要比我们的生命更长久。*
+*Named for the Latin word meaning "eternal" — because some messages are meant to outlast us.*
