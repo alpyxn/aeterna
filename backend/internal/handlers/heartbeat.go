@@ -4,6 +4,7 @@ import (
 	"github.com/alpyxn/aeterna/backend/internal/ports"
 	"github.com/alpyxn/aeterna/backend/internal/services"
 	"github.com/gofiber/fiber/v2"
+	"strings"
 )
 
 // HeartbeatHandlers groups quick-heartbeat and token route handlers.
@@ -75,7 +76,56 @@ func (h *HeartbeatHandlers) QuickHeartbeat(c *fiber.Ctx) error {
 		return c.SendString(html)
 	}
 
-	html := `<!DOCTYPE html>
+	autoSend := c.Query("auto") == "1"
+	autoScript := ""
+	autoLoadingStyle := "display: none;"
+	if autoSend {
+		autoLoadingStyle = "display: block;"
+		autoScript = `
+        window.addEventListener('load', function() {
+            submitHeartbeat();
+        });
+`
+	}
+
+	autoSubmitCall := `
+        function submitHeartbeat() {
+            const button = document.getElementById('heartbeatButton');
+            const loading = document.getElementById('loading');
+            const postURL = new URL(window.location.href);
+            postURL.searchParams.delete('auto');
+            
+            button.disabled = true;
+            loading.style.display = 'block';
+            
+            fetch(postURL.toString(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.text();
+                }
+                throw new Error('Failed to send heartbeat');
+            })
+            .then(html => {
+                document.body.innerHTML = html;
+            })
+            .catch(error => {
+                button.disabled = false;
+                loading.style.display = 'none';
+                alert('Error: ' + error.message);
+            });
+        }
+`
+
+	html := strings.NewReplacer(
+		"__AUTO_LOADING_STYLE__", autoLoadingStyle,
+		"__AUTO_SUBMIT_CALL__", autoSubmitCall,
+		"__AUTO_SCRIPT__", autoScript,
+	).Replace(`<!DOCTYPE html>
 <html>
 <head>
     <title>Send Heartbeat - Aeterna</title>
@@ -145,7 +195,7 @@ func (h *HeartbeatHandlers) QuickHeartbeat(c *fiber.Ctx) error {
             color: #999;
         }
         .loading {
-            display: none;
+            __AUTO_LOADING_STYLE__
             margin-top: 1rem;
             color: #667eea;
         }
@@ -164,39 +214,16 @@ func (h *HeartbeatHandlers) QuickHeartbeat(c *fiber.Ctx) error {
         <p class="footer">Aeterna</p>
     </div>
     <script>
+__AUTO_SUBMIT_CALL__
+__AUTO_SCRIPT__
         document.getElementById('heartbeatForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const button = document.getElementById('heartbeatButton');
-            const loading = document.getElementById('loading');
-
-            button.disabled = true;
-            loading.style.display = 'block';
-
-            fetch(window.location.href, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => {
-                if (response.ok) {
-                    return response.text();
-                }
-                throw new Error('Failed to send heartbeat');
-            })
-            .then(html => {
-                document.body.innerHTML = html;
-            })
-            .catch(error => {
-                button.disabled = false;
-                loading.style.display = 'none';
-                alert('Error: ' + error.message);
-            });
+            submitHeartbeat();
         });
     </script>
 </body>
 </html>
-`
+`)
 	c.Set("Content-Type", "text/html; charset=utf-8")
 	return c.SendString(html)
 }

@@ -36,6 +36,13 @@ func (s SettingsService) Get(userID string) (models.Settings, error) {
 		}
 		settings.WebhookSecret = decrypted
 	}
+	if settings.TelegramBotToken != "" {
+		decrypted, err := cryptoService.DecryptIfNeeded(settings.TelegramBotToken)
+		if err != nil {
+			return models.Settings{}, err
+		}
+		settings.TelegramBotToken = decrypted
+	}
 	return settings, nil
 }
 
@@ -54,6 +61,8 @@ func (s SettingsService) GetByHeartbeatToken(token string) (models.Settings, err
 
 func (s SettingsService) Save(userID string, req models.Settings) error {
 	req.WebhookURL = strings.TrimSpace(req.WebhookURL)
+	req.TelegramBotToken = strings.TrimSpace(req.TelegramBotToken)
+	req.TelegramChatID = strings.TrimSpace(req.TelegramChatID)
 	if req.WebhookEnabled && req.WebhookURL == "" {
 		return BadRequest("Webhook URL is required", nil)
 	}
@@ -78,6 +87,13 @@ func (s SettingsService) Save(userID string, req models.Settings) error {
 		}
 		req.WebhookSecret = encrypted
 	}
+	if req.TelegramBotToken != "" {
+		encrypted, err := cryptoService.EncryptIfNeeded(req.TelegramBotToken)
+		if err != nil {
+			return err
+		}
+		req.TelegramBotToken = encrypted
+	}
 
 	req.UserID = userID
 
@@ -85,6 +101,14 @@ func (s SettingsService) Save(userID string, req models.Settings) error {
 	result := database.DB.Where("user_id = ?", userID).First(&existing)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			if req.TelegramEnabled {
+				if req.TelegramBotToken == "" {
+					return BadRequest("Telegram bot token is required when Telegram reminders are enabled", nil)
+				}
+				if req.TelegramChatID == "" {
+					return BadRequest("Telegram chat ID is required when Telegram reminders are enabled", nil)
+				}
+			}
 			if err := database.DB.Create(&req).Error; err != nil {
 				return Internal("Failed to save settings", err)
 			}
@@ -106,6 +130,19 @@ func (s SettingsService) Save(userID string, req models.Settings) error {
 		existing.WebhookSecret = req.WebhookSecret
 	}
 	existing.WebhookEnabled = req.WebhookEnabled
+	if req.TelegramEnabled {
+		if req.TelegramChatID == "" {
+			return BadRequest("Telegram chat ID is required when Telegram reminders are enabled", nil)
+		}
+		if req.TelegramBotToken == "" && existing.TelegramBotToken == "" {
+			return BadRequest("Telegram bot token is required when Telegram reminders are enabled", nil)
+		}
+	}
+	if req.TelegramBotToken != "" {
+		existing.TelegramBotToken = req.TelegramBotToken
+	}
+	existing.TelegramChatID = req.TelegramChatID
+	existing.TelegramEnabled = req.TelegramEnabled
 	existing.OwnerEmail = req.OwnerEmail
 
 	if err := database.DB.Save(&existing).Error; err != nil {
@@ -113,6 +150,38 @@ func (s SettingsService) Save(userID string, req models.Settings) error {
 	}
 
 	return nil
+}
+
+func (s SettingsService) TestTelegram(userID string, req models.Settings) error {
+	current, err := s.Get(userID)
+	if err != nil {
+		return err
+	}
+
+	botToken := strings.TrimSpace(req.TelegramBotToken)
+	if botToken == "" {
+		botToken = strings.TrimSpace(current.TelegramBotToken)
+	}
+	chatID := strings.TrimSpace(req.TelegramChatID)
+	if chatID == "" {
+		chatID = strings.TrimSpace(current.TelegramChatID)
+	}
+	if botToken == "" {
+		return BadRequest("Telegram bot token is required for test", nil)
+	}
+	if chatID == "" {
+		return BadRequest("Telegram chat ID is required for test", nil)
+	}
+	if strings.TrimSpace(current.HeartbeatToken) == "" {
+		return Internal("Heartbeat token is not configured for this account", nil)
+	}
+
+	testSettings := current
+	testSettings.TelegramBotToken = botToken
+	testSettings.TelegramChatID = chatID
+
+	telegramService := TelegramService{}
+	return telegramService.SendTestHeartbeat(testSettings)
 }
 
 func (s SettingsService) TestSMTP(req models.Settings) error {

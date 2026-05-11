@@ -12,6 +12,7 @@ type settingsResponse struct {
 	models.Settings
 	AllowRegistration     bool `json:"allow_registration"`
 	CanManageRegistration bool `json:"can_manage_registration"`
+	TelegramBotConfigured bool `json:"telegram_bot_configured"`
 }
 
 // SettingsHandlers groups SMTP settings and application configuration handlers.
@@ -41,6 +42,7 @@ func (h *SettingsHandlers) Get(c *fiber.Ctx) error {
 		Settings:              settings,
 		AllowRegistration:     app.AllowRegistration,
 		CanManageRegistration: h.appSettings.CanManageRegistration(userID),
+		TelegramBotConfigured: settings.TelegramBotToken != "",
 	})
 }
 
@@ -76,4 +78,19 @@ func (h *SettingsHandlers) TestSMTP(c *fiber.Ctx) error {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true, "message": "Connection successful"})
+}
+
+func (h *SettingsHandlers) TestTelegram(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
+	var req models.SettingsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return writeError(c, services.BadRequest("Invalid request body", err))
+	}
+	if err := h.settings.TestTelegram(userID, req.ToSettings()); err != nil {
+		return writeError(c, err)
+	}
+	return c.JSON(fiber.Map{"success": true, "message": "Telegram message sent"})
 }

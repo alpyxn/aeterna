@@ -86,6 +86,7 @@ func main() {
 
 	database.DB.Exec("UPDATE messages SET encrypted_content = '' WHERE encrypted_content IS NULL;")
 	database.DB.Exec("UPDATE settings SET webhook_enabled = 0 WHERE webhook_enabled IS NULL;")
+	database.DB.Exec("UPDATE settings SET telegram_enabled = 0 WHERE telegram_enabled IS NULL;")
 
 	if err := services.EnsureUploadsDir(); err != nil {
 		log.Fatal("Failed to create uploads directory: ", err)
@@ -181,7 +182,6 @@ func main() {
 	mgmt.Delete("/messages/:id", messageH.Delete)
 	mgmt.Put("/messages/:id", messageH.Update)
 	mgmt.Post("/heartbeat", messageH.Heartbeat)
-
 	mgmt.Post("/messages/:id/attachments", attachH.Upload)
 	mgmt.Get("/messages/:id/attachments", attachH.List)
 	mgmt.Delete("/messages/:id/attachments/:attachmentId", attachH.Delete)
@@ -202,6 +202,7 @@ func main() {
 	mgmt.Get("/settings", settingsH.Get)
 	mgmt.Post("/settings", settingsH.Save)
 	mgmt.Post("/settings/test", settingsH.TestSMTP)
+	mgmt.Post("/settings/telegram/test", settingsH.TestTelegram)
 	mgmt.Get("/heartbeat-token", heartbeatH.GetToken)
 
 	mgmt.Get("/users", usersH.List)

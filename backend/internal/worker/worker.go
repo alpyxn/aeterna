@@ -3,7 +3,6 @@ package worker
 import (
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -19,6 +18,7 @@ type Worker struct {
 	webhooks ports.WebhookStorePort
 	files    ports.FileServicePort
 	email    services.EmailService
+	telegram services.TelegramService
 	webhook  services.WebhookService
 }
 
@@ -69,15 +69,41 @@ func (w *Worker) checkReminders() {
 		if msg.UserID == "" {
 			continue
 		}
+
 		settings, err := w.settings.Get(msg.UserID)
-		if err != nil || settings.OwnerEmail == "" || settings.SMTPHost == "" {
+		if err != nil {
 			continue
 		}
-		w.sendReminderEmail(settings, msg, req)
+		if w.dispatchReminder(settings, msg, req) {
+			if err := database.DB.Model(&req).Update("sent", true).Error; err != nil {
+				slog.Error("Failed to mark reminder as sent", "error", err, "reminder_id", req.ID)
+			}
+		}
 	}
 }
 
-func (w *Worker) sendReminderEmail(settings models.Settings, msg models.Message, reminder models.MessageReminder) {
+func (w *Worker) dispatchReminder(settings models.Settings, msg models.Message, reminder models.MessageReminder) bool {
+	if settings.TelegramEnabled {
+		if err := w.sendReminderTelegram(settings, msg); err != nil {
+			slog.Error("Failed to send Telegram reminder", "error", err, "message_id", msg.ID, "chat_id", settings.TelegramChatID)
+		} else {
+			slog.Info("Telegram reminder sent", "message_id", msg.ID, "minutes_before", reminder.MinutesBefore)
+			return true
+		}
+	}
+
+	if settings.OwnerEmail == "" || settings.SMTPHost == "" {
+		return false
+	}
+	if err := w.sendReminderEmail(settings, msg); err != nil {
+		slog.Error("Failed to send reminder email", "error", err, "owner", settings.OwnerEmail)
+		return false
+	}
+	slog.Info("Reminder email sent", "owner", settings.OwnerEmail, "message_id", msg.ID, "minutes_before", reminder.MinutesBefore)
+	return true
+}
+
+func (w *Worker) sendReminderEmail(settings models.Settings, msg models.Message) error {
 	lastSeen := msg.LastSeen
 	triggerTime := lastSeen.Add(time.Duration(msg.TriggerDuration) * time.Minute)
 	remaining := time.Until(triggerTime)
@@ -92,11 +118,7 @@ func (w *Worker) sendReminderEmail(settings models.Settings, msg models.Message,
 		remainingStr = fmt.Sprintf("%.0f minute(s)", remaining.Minutes())
 	}
 
-	baseURL := os.Getenv("BASE_URL")
-	if baseURL == "" {
-		baseURL = "http://localhost:5173"
-	}
-	quickLink := fmt.Sprintf("%s/api/quick-heartbeat/%s", baseURL, settings.HeartbeatToken)
+	quickLink := services.BuildQuickHeartbeatURL(settings.HeartbeatToken, false)
 
 	subject := "Check-in required"
 	body := fmt.Sprintf(`You have a scheduled message that will be sent in %s unless you confirm.
@@ -109,16 +131,25 @@ To confirm you are available, click the link below:
 ---
 Sent by Aeterna`, remainingStr, formatRecipients(msg.RecipientEmail), quickLink)
 
-	err := w.email.SendPlain(settings, []string{settings.OwnerEmail}, subject, body)
-	if err != nil {
-		slog.Error("Failed to send reminder email", "error", err, "owner", settings.OwnerEmail)
-		return
+	return w.email.SendPlain(settings, []string{settings.OwnerEmail}, subject, body)
+}
+
+func (w *Worker) sendReminderTelegram(settings models.Settings, msg models.Message) error {
+	lastSeen := msg.LastSeen
+	triggerTime := lastSeen.Add(time.Duration(msg.TriggerDuration) * time.Minute)
+	remaining := time.Until(triggerTime)
+
+	var remainingStr string
+	if remaining.Hours() > 24 {
+		days := int(remaining.Hours() / 24)
+		remainingStr = fmt.Sprintf("%d day(s)", days)
+	} else if remaining.Hours() > 1 {
+		remainingStr = fmt.Sprintf("%.0f hour(s)", remaining.Hours())
+	} else {
+		remainingStr = fmt.Sprintf("%.0f minute(s)", remaining.Minutes())
 	}
 
-	if err := database.DB.Model(&reminder).Update("sent", true).Error; err != nil {
-		slog.Error("Failed to mark reminder as sent", "error", err, "reminder_id", reminder.ID)
-	}
-	slog.Info("Reminder email sent", "owner", settings.OwnerEmail, "message_id", msg.ID, "minutes_before", reminder.MinutesBefore)
+	return w.telegram.SendHeartbeatReminder(settings, remainingStr, formatRecipients(msg.RecipientEmail))
 }
 
 func (w *Worker) checkHeartbeats() {

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Mail, Server, Save, Loader2, CheckCircle, Eye, EyeOff, TestTube, ChevronDown, ChevronUp, ExternalLink, Trash2, UserPlus, AlertTriangle, Users, Shield } from 'lucide-react';
+import { Mail, Server, Save, Loader2, CheckCircle, Eye, EyeOff, TestTube, ChevronDown, ChevronUp, ExternalLink, Trash2, UserPlus, AlertTriangle, Users, Shield, MessageCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { apiRequest } from "@/lib/api";
 import {
@@ -86,17 +86,24 @@ export default function Settings() {
         smtp_from: '',
         smtp_from_name: 'Aeterna',
         owner_email: '',
+        telegram_bot_token: '',
+        telegram_chat_id: '',
+        telegram_enabled: false,
+        telegram_bot_configured: false,
         allow_registration: false,
         can_manage_registration: false,
     });
     const [configLoading, setConfigLoading] = useState(true);
     const [loading, setLoading] = useState(false);
     const [testLoading, setTestLoading] = useState(false);
-    /** Which settings card last saved successfully ('owner' | 'registration' | 'smtp'), or null */
+    /** Which settings card last saved successfully ('owner' | 'telegram' | 'registration' | 'smtp'), or null */
     const [savedSection, setSavedSection] = useState(null);
     const [testSuccess, setTestSuccess] = useState(false);
+    const [telegramTestLoading, setTelegramTestLoading] = useState(false);
+    const [telegramTestSuccess, setTelegramTestSuccess] = useState(false);
     const [error, setError] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [showTelegramToken, setShowTelegramToken] = useState(false);
     const [webhooks, setWebhooks] = useState([]);
     const [webhookLoading, setWebhookLoading] = useState(false);
     const [showWebhookSecret, setShowWebhookSecret] = useState(false);
@@ -238,6 +245,13 @@ export default function Settings() {
                 method: 'POST',
                 body: JSON.stringify(config)
             });
+            if (section === 'telegram') {
+                setConfig(prev => ({
+                    ...prev,
+                    telegram_bot_token: '',
+                    telegram_bot_configured: prev.telegram_bot_configured || Boolean(prev.telegram_bot_token),
+                }));
+            }
             setSavedSection(section);
             setTimeout(() => setSavedSection((s) => (s === section ? null : s)), 3000);
             if (section === 'registration' && config.allow_registration) {
@@ -269,6 +283,24 @@ export default function Settings() {
             setError(e.message);
         } finally {
             setTestLoading(false);
+        }
+    };
+
+    const handleTestTelegram = async () => {
+        setTelegramTestLoading(true);
+        setError(null);
+        setTelegramTestSuccess(false);
+        try {
+            await apiRequest('/settings/telegram/test', {
+                method: 'POST',
+                body: JSON.stringify(config)
+            });
+            setTelegramTestSuccess(true);
+            setTimeout(() => setTelegramTestSuccess(false), 3000);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setTelegramTestLoading(false);
         }
     };
 
@@ -408,6 +440,139 @@ export default function Settings() {
                             <Save className="w-3.5 h-3.5 mr-1.5" />
                         )}
                         Save Email
+                    </Button>
+                </CardFooter>
+            </Card>
+
+            <Card className="border-dark-700 bg-dark-900">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base font-medium text-dark-100">
+                        <MessageCircle className="w-4 h-4 text-teal-400" />
+                        Telegram Heartbeat Reminders
+                    </CardTitle>
+                    <CardDescription className="text-dark-400">
+                        Send check-in reminders through a Telegram bot. When enabled, Aeterna will try Telegram first and fall back to email if Telegram delivery fails.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <label className="flex items-start gap-3 cursor-pointer group">
+                        <input
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-dark-600 bg-dark-950 text-teal-600 focus:ring-teal-500 focus:ring-offset-0"
+                            checked={Boolean(config.telegram_enabled)}
+                            onChange={(e) => {
+                                setConfig({ ...config, telegram_enabled: e.target.checked });
+                                if (error) setError(null);
+                                setSavedSection(null);
+                                if (telegramTestSuccess) setTelegramTestSuccess(false);
+                            }}
+                        />
+                        <span className="text-sm text-dark-200">
+                            Enable Telegram reminders for heartbeat check-ins
+                        </span>
+                    </label>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
+                                Bot Token
+                            </label>
+                            <div className="relative">
+                                <Input
+                                    type={showTelegramToken ? "text" : "password"}
+                                    placeholder={config.telegram_bot_configured ? "Saved token hidden; enter a new one to replace it" : "123456789:AA..."}
+                                    value={config.telegram_bot_token || ''}
+                                    onChange={(e) => {
+                                        setConfig({ ...config, telegram_bot_token: e.target.value });
+                                        if (error) setError(null);
+                                        setSavedSection(null);
+                                        if (telegramTestSuccess) setTelegramTestSuccess(false);
+                                    }}
+                                    className="bg-dark-950 border-dark-800 pr-10"
+                                    aria-invalid={Boolean(error)}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTelegramToken(!showTelegramToken)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-500 hover:text-dark-300"
+                                >
+                                    {showTelegramToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                            </div>
+                            <p className="text-xs text-dark-500">
+                                {config.telegram_bot_configured ? 'A token is already stored. Leave this blank to keep it.' : 'Create a Telegram bot with BotFather and paste the token here.'}
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
+                                Chat ID
+                            </label>
+                            <Input
+                                placeholder="123456789"
+                                value={config.telegram_chat_id || ''}
+                                onChange={(e) => {
+                                    setConfig({ ...config, telegram_chat_id: e.target.value });
+                                    if (error) setError(null);
+                                    setSavedSection(null);
+                                    if (telegramTestSuccess) setTelegramTestSuccess(false);
+                                }}
+                                className="bg-dark-950 border-dark-800"
+                                aria-invalid={Boolean(error)}
+                            />
+                            <p className="text-xs text-dark-500">
+                                Use your private chat ID with the bot. The Telegram button opens Aeterna and confirms the heartbeat automatically.
+                            </p>
+                        </div>
+                    </div>
+
+                    {savedSection === 'telegram' && (
+                        <Alert className="border-green-500/30 bg-green-500/10">
+                            <CheckCircle className="h-4 w-4 text-green-400" />
+                            <AlertDescription className="text-green-400">
+                                Telegram settings saved successfully!
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {telegramTestSuccess && (
+                        <Alert className="border-green-500/30 bg-green-500/10">
+                            <CheckCircle className="h-4 w-4 text-green-400" />
+                            <AlertDescription className="text-green-400">
+                                Telegram test message sent successfully!
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                </CardContent>
+                <CardFooter className="flex flex-col sm:flex-row gap-2">
+                    <Button
+                        variant="outline"
+                        className="border-dark-700 hover:bg-dark-800"
+                        onClick={handleTestTelegram}
+                        disabled={
+                            telegramTestLoading ||
+                            configLoading ||
+                            !config.telegram_chat_id ||
+                            (!config.telegram_bot_token && !config.telegram_bot_configured)
+                        }
+                    >
+                        {telegramTestLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        ) : (
+                            <TestTube className="w-4 h-4 mr-2" />
+                        )}
+                        Send Test Message
+                    </Button>
+                    <Button
+                        className="flex-1 bg-teal-600 hover:bg-teal-500"
+                        onClick={() => handleSave('telegram')}
+                        disabled={loading || configLoading}
+                    >
+                        {loading ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        ) : (
+                            <Save className="w-4 h-4 mr-2" />
+                        )}
+                        Save Telegram
                     </Button>
                 </CardFooter>
             </Card>

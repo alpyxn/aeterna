@@ -60,6 +60,7 @@ type SettingsServicePort interface {
 	GetByHeartbeatToken(token string) (models.Settings, error)
 	Save(userID string, req models.Settings) error
 	TestSMTP(req models.Settings) error
+	TestTelegram(userID string, req models.Settings) error
 }
 
 // ApplicationSettingsServicePort covers the global (singleton) application settings.

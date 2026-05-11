@@ -15,22 +15,28 @@ type Settings struct {
 	WebhookURL         string `gorm:"column:webhook_url" json:"webhook_url"`
 	WebhookSecret      string `gorm:"column:webhook_secret" json:"-"` // Hidden from API responses
 	WebhookEnabled     bool   `gorm:"column:webhook_enabled;default:0" json:"webhook_enabled"`
+	TelegramBotToken   string `gorm:"column:telegram_bot_token" json:"-"`
+	TelegramChatID     string `gorm:"column:telegram_chat_id" json:"telegram_chat_id"`
+	TelegramEnabled    bool   `gorm:"column:telegram_enabled;default:0" json:"telegram_enabled"`
 	OwnerEmail         string `gorm:"column:owner_email" json:"owner_email"`
 	HeartbeatToken     string `gorm:"column:heartbeat_token" json:"-"`
 }
 
 // SettingsRequest is used for receiving settings from API (includes sensitive fields)
 type SettingsRequest struct {
-	SMTPHost       string `json:"smtp_host"`
-	SMTPPort       string `json:"smtp_port"`
-	SMTPUser       string `json:"smtp_user"`
-	SMTPPass       string `json:"smtp_pass"` // Accepted from API requests
-	SMTPFrom       string `json:"smtp_from"`
-	SMTPFromName   string `json:"smtp_from_name"`
-	WebhookURL     string `json:"webhook_url"`
-	WebhookSecret  string `json:"webhook_secret"` // Accepted from API requests
-	WebhookEnabled bool   `json:"webhook_enabled"`
-	OwnerEmail     string `json:"owner_email"`
+	SMTPHost         string `json:"smtp_host"`
+	SMTPPort         string `json:"smtp_port"`
+	SMTPUser         string `json:"smtp_user"`
+	SMTPPass         string `json:"smtp_pass"` // Accepted from API requests
+	SMTPFrom         string `json:"smtp_from"`
+	SMTPFromName     string `json:"smtp_from_name"`
+	WebhookURL       string `json:"webhook_url"`
+	WebhookSecret    string `json:"webhook_secret"` // Accepted from API requests
+	WebhookEnabled   bool   `json:"webhook_enabled"`
+	TelegramBotToken string `json:"telegram_bot_token"`
+	TelegramChatID   string `json:"telegram_chat_id"`
+	TelegramEnabled  bool   `json:"telegram_enabled"`
+	OwnerEmail       string `json:"owner_email"`
 	// AllowRegistration: only the primary (first) user may set this; persisted in application_settings.
 	AllowRegistration *bool `json:"allow_registration,omitempty"`
 }
@@ -38,15 +44,18 @@ type SettingsRequest struct {
 // ToSettings converts SettingsRequest to Settings model
 func (r SettingsRequest) ToSettings() Settings {
 	return Settings{
-		SMTPHost:       r.SMTPHost,
-		SMTPPort:       r.SMTPPort,
-		SMTPUser:       r.SMTPUser,
-		SMTPPass:       r.SMTPPass,
-		SMTPFrom:       r.SMTPFrom,
-		SMTPFromName:   r.SMTPFromName,
-		WebhookURL:     r.WebhookURL,
-		WebhookSecret:  r.WebhookSecret,
-		WebhookEnabled: r.WebhookEnabled,
-		OwnerEmail:     r.OwnerEmail,
+		SMTPHost:         r.SMTPHost,
+		SMTPPort:         r.SMTPPort,
+		SMTPUser:         r.SMTPUser,
+		SMTPPass:         r.SMTPPass,
+		SMTPFrom:         r.SMTPFrom,
+		SMTPFromName:     r.SMTPFromName,
+		WebhookURL:       r.WebhookURL,
+		WebhookSecret:    r.WebhookSecret,
+		WebhookEnabled:   r.WebhookEnabled,
+		TelegramBotToken: r.TelegramBotToken,
+		TelegramChatID:   r.TelegramChatID,
+		TelegramEnabled:  r.TelegramEnabled,
+		OwnerEmail:       r.OwnerEmail,
 	}
 }
