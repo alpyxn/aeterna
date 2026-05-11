@@ -12,8 +12,8 @@ services:
     environment:
       - DATABASE_PATH=/app/data/aeterna.db
       - ENV=production
-      - ALLOWED_ORIGINS=https://${DOMAIN}
-      - BASE_URL=https://${DOMAIN}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://${DOMAIN}}
+      - BASE_URL=${BASE_URL:-https://${DOMAIN}}
       # Encryption key is provided via Docker secrets (mounted at /run/secrets/encryption_key)
 
     command: ["./main", "--encryption-key-file=/run/secrets/encryption_key"]
