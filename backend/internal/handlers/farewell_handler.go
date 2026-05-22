@@ -122,6 +122,36 @@ func (h *FarewellHandlers) Delete(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"success": true, "message": "Farewell letter deleted"})
 }
 
+func (h *FarewellHandlers) CancelPending(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
+	messageID := c.Params("id")
+	letterID := c.Params("letterId")
+
+	if err := h.farewell.CancelPending(userID, messageID, letterID); err != nil {
+		return writeError(c, err)
+	}
+
+	return c.JSON(fiber.Map{"success": true, "message": "Pending farewell letter canceled"})
+}
+
+func (h *FarewellHandlers) CancelAllPending(c *fiber.Ctx) error {
+	userID, err := currentUserID(c)
+	if err != nil {
+		return writeError(c, err)
+	}
+	messageID := c.Params("id")
+
+	count, err := h.farewell.CancelPendingByMessageID(userID, messageID)
+	if err != nil {
+		return writeError(c, err)
+	}
+
+	return c.JSON(fiber.Map{"success": true, "canceled": count})
+}
+
 func (h *FarewellHandlers) UploadAttachment(c *fiber.Ctx) error {
 	userID, err := currentUserID(c)
 	if err != nil {

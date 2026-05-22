@@ -54,6 +54,62 @@ func TestMessageDelete_NoFarewellNoAttachments(t *testing.T) {
 	}
 }
 
+func TestMessageList_IncludesFarewellCounts(t *testing.T) {
+	db := setupTestDB(t)
+	initTestKeyManager(t)
+	encrypted, err := (CryptoService{}).Encrypt("hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.Message{
+		ID: "m-counts", UserID: "u-counts", Content: encrypted, KeyFragment: "v1",
+		ManagementToken: "tok", RecipientEmail: "a@a.com",
+		TriggerDuration: 60, LastSeen: time.Now(), Status: models.StatusTriggered,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, letter := range []models.FarewellLetter{
+		{
+			ID:             "l-counts-pending",
+			UserID:         "u-counts",
+			MessageID:      "m-counts",
+			RecipientEmail: "pending@example.com",
+			Subject:        "Pending",
+			Content:        "encrypted",
+			DelayMinutes:   60,
+			Status:         models.FarewellStatusPending,
+		},
+		{
+			ID:             "l-counts-sent",
+			UserID:         "u-counts",
+			MessageID:      "m-counts",
+			RecipientEmail: "sent@example.com",
+			Subject:        "Sent",
+			Content:        "encrypted",
+			DelayMinutes:   0,
+			Status:         models.FarewellStatusSent,
+		},
+	} {
+		if err := db.Create(&letter).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	messages, err := (MessageService{}).List("u-counts")
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(messages))
+	}
+	if messages[0].FarewellCount != 2 {
+		t.Fatalf("expected farewell_count=2, got %d", messages[0].FarewellCount)
+	}
+	if messages[0].PendingFarewells != 1 {
+		t.Fatalf("expected pending_farewells=1, got %d", messages[0].PendingFarewells)
+	}
+}
+
 func TestMessageDelete_WithFarewellLetter(t *testing.T) {
 	db := setupTestDB(t)
 	if err := db.Create(&models.Message{

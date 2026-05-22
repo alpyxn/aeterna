@@ -6,14 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
     Mail, Clock, Trash2, Paperclip, X, Plus, Loader2, CheckCircle,
     AlertCircle, Eye, Pencil, Upload, Send
 } from 'lucide-react';
 import {
     listFarewellLetters, createFarewellLetter, updateFarewellLetter,
-    deleteFarewellLetter, uploadFarewellAttachment,
+    deleteFarewellLetter, cancelFarewellLetter, cancelAllPendingFarewellLetters, uploadFarewellAttachment,
     listFarewellAttachments, deleteFarewellAttachment
 } from "@/lib/api";
 import { ALLOWED_EXTENSIONS, MAX_FILE_SIZE, MAX_FILES, MAX_TOTAL_SIZE, FAREWELL_DELAY_PRESETS, EMAIL_REGEX } from "@/lib/constants"
@@ -335,7 +334,7 @@ function LetterForm({ messageId, letter, onSave, onCancel }) {
     );
 }
 
-export default function FarewellLetters({ messageId }) {
+export default function FarewellLetters({ messageId, mode = 'edit', onChanged }) {
     const [letters, setLetters] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -343,6 +342,8 @@ export default function FarewellLetters({ messageId }) {
     const [showForm, setShowForm] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
     const toastTimeoutRef = useRef(null);
+    const queueMode = mode === 'queue';
+    const pendingLetters = letters.filter(letter => letter.status === 'pending');
 
     const loadLetters = useCallback(async () => {
         if (!messageId) return;
@@ -392,6 +393,7 @@ export default function FarewellLetters({ messageId }) {
         });
         setShowForm(false);
         setEditingLetter(null);
+        onChanged?.();
         showToast(meta.isNewLetter ? 'Letter saved to switch' : 'Letter changes saved');
     }
 
@@ -404,6 +406,29 @@ export default function FarewellLetters({ messageId }) {
         try {
             await deleteFarewellLetter(messageId, letterId);
             setLetters(prev => prev.filter(l => l.id !== letterId));
+            onChanged?.();
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    async function handleCancel(letterId) {
+        try {
+            await cancelFarewellLetter(messageId, letterId);
+            setLetters(prev => prev.filter(l => l.id !== letterId));
+            onChanged?.();
+            showToast('Pending delivery canceled');
+        } catch (err) {
+            setError(err.message);
+        }
+    }
+
+    async function handleCancelAll() {
+        try {
+            const result = await cancelAllPendingFarewellLetters(messageId);
+            setLetters(prev => prev.filter(l => l.status !== 'pending'));
+            onChanged?.();
+            showToast(`${result?.canceled || 0} pending deliver${result?.canceled === 1 ? 'y' : 'ies'} canceled`);
         } catch (err) {
             setError(err.message);
         }
@@ -431,10 +456,37 @@ export default function FarewellLetters({ messageId }) {
                 <div>
                     <h3 className="text-sm font-medium text-dark-100">Farewell Letters</h3>
                     <p className="text-xs text-dark-400 mt-0.5">
-                        Personal messages sent after this switch fires, each with its own delay.
+                        {queueMode
+                            ? 'Pending deliveries can be canceled after this switch has triggered.'
+                            : 'Personal messages sent after this switch fires, each with its own delay.'}
                     </p>
                 </div>
-                {!showForm && !editingLetter && (
+                {queueMode && pendingLetters.length > 0 && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="outline"
+                                className="border-red-500/30 bg-red-950/20 hover:bg-red-950/40 text-red-300 shrink-0">
+                                <Trash2 className="w-3 h-3 mr-1" /> Cancel all
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-dark-900 border-dark-700">
+                            <AlertDialogTitle>Cancel all pending letters?</AlertDialogTitle>
+                            <AlertDialogDescription className="text-dark-400">
+                                This cancels every pending farewell letter for this triggered switch. Sent letters are not changed.
+                            </AlertDialogDescription>
+                            <div className="flex gap-2 justify-end mt-2">
+                                <AlertDialogCancel className="border-dark-700 bg-dark-900 hover:bg-dark-800 text-dark-200">
+                                    Keep queue
+                                </AlertDialogCancel>
+                                <AlertDialogAction onClick={handleCancelAll}
+                                    className="bg-red-600 hover:bg-red-500 text-white border-0">
+                                    Cancel all pending
+                                </AlertDialogAction>
+                            </div>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
+                {!queueMode && !showForm && !editingLetter && (
                     <Button size="sm" variant="outline" onClick={() => setShowForm(true)}
                         className="border-dark-700 bg-dark-900 hover:bg-dark-800 text-dark-200 shrink-0">
                         <Plus className="w-3 h-3 mr-1" /> Add letter
@@ -457,9 +509,18 @@ export default function FarewellLetters({ messageId }) {
                 />
             )}
 
+            {queueMode && letters.length > 0 && pendingLetters.length === 0 && (
+                <Alert className="border-teal-500/20 bg-teal-500/10">
+                    <CheckCircle className="h-4 w-4 text-teal-400" />
+                    <AlertDescription className="text-teal-200">
+                        No pending farewell deliveries remain for this switch.
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {letters.length === 0 && !showForm ? (
                 <div className="text-center py-6 text-dark-500 text-xs border border-dashed border-dark-700 rounded-lg">
-                    No farewell letters configured yet.
+                    {queueMode ? 'No farewell letters are queued for this switch.' : 'No farewell letters configured yet.'}
                 </div>
             ) : (
                 <div className="space-y-2">
@@ -491,7 +552,7 @@ export default function FarewellLetters({ messageId }) {
                                             )}
                                         </div>
                                     </div>
-                                    {letter.status !== 'sent' && (
+                                    {letter.status !== 'sent' && !queueMode && (
                                         <div className="flex items-center gap-1 shrink-0">
                                             <Button size="sm" variant="ghost" onClick={() => setEditingLetter(letter)}
                                                 className="h-7 w-7 p-0 text-dark-400 hover:text-dark-100 hover:bg-dark-800">
@@ -521,6 +582,31 @@ export default function FarewellLetters({ messageId }) {
                                                 </AlertDialogContent>
                                             </AlertDialog>
                                         </div>
+                                    )}
+                                    {letter.status !== 'sent' && queueMode && (
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button size="sm" variant="outline"
+                                                    className="h-8 border-red-500/30 bg-red-950/20 hover:bg-red-950/40 text-red-300 shrink-0">
+                                                    <Trash2 className="w-3 h-3 mr-1" /> Cancel
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent className="bg-dark-900 border-dark-700">
+                                                <AlertDialogTitle>Cancel pending letter?</AlertDialogTitle>
+                                                <AlertDialogDescription className="text-dark-400">
+                                                    This prevents this farewell letter from being delivered. Sent letters cannot be canceled.
+                                                </AlertDialogDescription>
+                                                <div className="flex gap-2 justify-end mt-2">
+                                                    <AlertDialogCancel className="border-dark-700 bg-dark-900 hover:bg-dark-800 text-dark-200">
+                                                        Keep letter
+                                                    </AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleCancel(letter.id)}
+                                                        className="bg-red-600 hover:bg-red-500 text-white border-0">
+                                                        Cancel delivery
+                                                    </AlertDialogAction>
+                                                </div>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     )}
                                 </div>
                             )}

@@ -102,6 +102,8 @@ export default function Dashboard() {
     const [showEditAttachments, setShowEditAttachments] = useState(false);
     const [editAttachLoading, setEditAttachLoading] = useState(false);
     const editFileInputRef = useRef(null);
+    const [queueMessage, setQueueMessage] = useState(null);
+    const [queueDialogOpen, setQueueDialogOpen] = useState(false);
 
 
     const handleEditDurationChange = (newDuration) => {
@@ -134,6 +136,11 @@ export default function Dashboard() {
         } catch {
             setEditAttachments([]);
         }
+    };
+
+    const openQueueDialog = (message) => {
+        setQueueMessage(message);
+        setQueueDialogOpen(true);
     };
 
     const addEditRecipientsFromText = (text) => {
@@ -381,6 +388,9 @@ export default function Dashboard() {
                         const recipients = parseRecipientEmails(message.recipient_email);
                         const previewRecipients = recipients.slice(0, RECIPIENT_PREVIEW_LIMIT);
                         const hasMoreRecipients = recipients.length > RECIPIENT_PREVIEW_LIMIT;
+                        const farewellCount = message.farewell_count || 0;
+                        const pendingFarewells = message.pending_farewells || 0;
+                        const canManageQueue = isTriggered && farewellCount > 0;
                         const recipientSummaryLabel = recipients.length === 0
                             ? 'No recipients'
                             : recipients.length === 1
@@ -524,6 +534,22 @@ export default function Dashboard() {
                                             disabled={actionLoading === message.id}
                                         >
                                             <Pencil className="w-4 h-4" />
+                                        </Button>
+                                    )}
+                                    {canManageQueue && (
+                                        <Button
+                                            variant="outline"
+                                            className="h-9 border-dark-700 px-3 text-xs hover:bg-amber-500/10 hover:border-amber-500/30 hover:text-amber-300"
+                                            onClick={() => openQueueDialog(message)}
+                                            disabled={actionLoading === message.id}
+                                        >
+                                            <Clock className="w-4 h-4" />
+                                            Queue
+                                            {pendingFarewells > 0 && (
+                                                <span className="ml-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+                                                    {pendingFarewells}
+                                                </span>
+                                            )}
                                         </Button>
                                     )}
                                     <AlertDialog>
@@ -797,7 +823,7 @@ export default function Dashboard() {
                         </div>
                     </div>
                     <div className="border-t border-dark-700 pt-4 mt-2">
-                        <FarewellLetters messageId={editingMessage?.id} />
+                        <FarewellLetters messageId={editingMessage?.id} onChanged={fetchMessages} />
                     </div>
                     <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
                         <Button
@@ -817,6 +843,29 @@ export default function Dashboard() {
                             ) : null}
                             Save Changes
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={queueDialogOpen} onOpenChange={(open) => {
+                setQueueDialogOpen(open);
+                if (!open) setQueueMessage(null);
+            }}>
+                <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-dark-900 border-dark-700">
+                    <DialogHeader>
+                        <DialogTitle>Manage Queue</DialogTitle>
+                        <DialogDescription className="text-dark-400">
+                            {queueMessage
+                                ? `Triggered switch for ${formatRecipientEmails(queueMessage.recipient_email)}`
+                                : 'Triggered switch'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="mt-4">
+                        <FarewellLetters
+                            messageId={queueMessage?.id}
+                            mode="queue"
+                            onChanged={fetchMessages}
+                        />
                     </div>
                 </DialogContent>
             </Dialog>

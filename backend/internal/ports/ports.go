@@ -52,6 +52,8 @@ type FarewellServicePort interface {
 	List(userID, messageID string) ([]models.FarewellLetter, error)
 	Update(userID, messageID, id, recipientEmail, subject, content string, delayMinutes int) (models.FarewellLetter, error)
 	Delete(userID, messageID, id string) error
+	CancelPending(userID, messageID, id string) error
+	CancelPendingByMessageID(userID, messageID string) (int64, error)
 }
 
 // SettingsServicePort covers per-user SMTP and heartbeat token configuration.

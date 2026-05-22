@@ -15,21 +15,23 @@ const (
 )
 
 type Message struct {
-	ID              string            `gorm:"type:text;primaryKey" json:"id"`
-	UserID          string            `gorm:"type:text;index" json:"-"`
-	Content         string            `gorm:"column:encrypted_content;not null" json:"content"`
-	KeyFragment     string            `gorm:"column:key_fragment;not null" json:"-"`
-	ManagementToken string            `gorm:"column:management_token;not null" json:"-"`
-	RecipientEmail  string            `gorm:"not null" json:"recipient_email"`
-	TriggerDuration int               `gorm:"not null" json:"trigger_duration"`
-	LastSeen        time.Time         `gorm:"not null;default:CURRENT_TIMESTAMP" json:"last_seen"`
-	Status          MessageStatus     `gorm:"default:'active'" json:"status"`
-	TriggeredAt     *time.Time        `json:"triggered_at,omitempty"`
-	Reminders       []MessageReminder `gorm:"foreignKey:MessageID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"reminders"`
-	CreatedAt       time.Time         `json:"created_at"`
-	UpdatedAt       time.Time         `json:"updated_at"`
-	DeletedAt       gorm.DeletedAt    `gorm:"index" json:"-"`
-	AttachmentCount int64             `gorm:"-" json:"attachment_count"`
+	ID               string            `gorm:"type:text;primaryKey" json:"id"`
+	UserID           string            `gorm:"type:text;index" json:"-"`
+	Content          string            `gorm:"column:encrypted_content;not null" json:"content"`
+	KeyFragment      string            `gorm:"column:key_fragment;not null" json:"-"`
+	ManagementToken  string            `gorm:"column:management_token;not null" json:"-"`
+	RecipientEmail   string            `gorm:"not null" json:"recipient_email"`
+	TriggerDuration  int               `gorm:"not null" json:"trigger_duration"`
+	LastSeen         time.Time         `gorm:"not null;default:CURRENT_TIMESTAMP" json:"last_seen"`
+	Status           MessageStatus     `gorm:"default:'active'" json:"status"`
+	TriggeredAt      *time.Time        `json:"triggered_at,omitempty"`
+	Reminders        []MessageReminder `gorm:"foreignKey:MessageID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"reminders"`
+	CreatedAt        time.Time         `json:"created_at"`
+	UpdatedAt        time.Time         `json:"updated_at"`
+	DeletedAt        gorm.DeletedAt    `gorm:"index" json:"-"`
+	AttachmentCount  int64             `gorm:"-" json:"attachment_count"`
+	FarewellCount    int64             `gorm:"-" json:"farewell_count"`
+	PendingFarewells int64             `gorm:"-" json:"pending_farewells"`
 }
 
 // BeforeCreate hook to generate UUID before creating

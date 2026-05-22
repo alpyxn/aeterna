@@ -153,6 +153,8 @@ func (s MessageService) List(userID string) ([]models.Message, error) {
 
 		count, _ := msgFileService.CountByMessageID(userID, messages[i].ID)
 		messages[i].AttachmentCount = count
+		database.ForTenant(userID).Model(&models.FarewellLetter{}).Where("message_id = ?", messages[i].ID).Count(&messages[i].FarewellCount)
+		database.ForTenant(userID).Model(&models.FarewellLetter{}).Where("message_id = ? AND status = ?", messages[i].ID, models.FarewellStatusPending).Count(&messages[i].PendingFarewells)
 	}
 	return messages, nil
 }

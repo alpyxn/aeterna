@@ -232,6 +232,8 @@ func registerProtectedRoutes(
 	group.Post("/messages/:id/farewell-letters", farewellH.Create)
 	group.Put("/messages/:id/farewell-letters/:letterId", farewellH.Update)
 	group.Delete("/messages/:id/farewell-letters/:letterId", farewellH.Delete)
+	group.Post("/messages/:id/farewell-letters/cancel-pending", farewellH.CancelAllPending)
+	group.Post("/messages/:id/farewell-letters/:letterId/cancel", farewellH.CancelPending)
 	group.Post("/messages/:id/farewell-letters/:letterId/attachments", farewellH.UploadAttachment)
 	group.Get("/messages/:id/farewell-letters/:letterId/attachments", farewellH.ListAttachments)
 	group.Delete("/messages/:id/farewell-letters/:letterId/attachments/:attachmentId", farewellH.DeleteAttachment)

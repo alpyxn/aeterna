@@ -207,6 +207,9 @@ func (s FileService) UploadFarewellAttachment(userID, letterID, filename, mimeTy
 	if letter.Status == models.FarewellStatusSent {
 		return models.FarewellAttachment{}, BadRequest("Cannot attach files to an already-sent farewell letter", nil)
 	}
+	if err := requireFarewellMessageNotTriggered(userID, letter.MessageID, "Cannot modify farewell attachments after the switch has triggered"); err != nil {
+		return models.FarewellAttachment{}, err
+	}
 
 	cleanFilename := fileValidationService.SanitizeFilename(filename)
 	if err := fileValidationService.ValidateFarewellFile(cleanFilename, int64(len(data)), data); err != nil {
@@ -286,6 +289,16 @@ func (s FileService) DeleteFarewellAttachment(userID, attachmentID string) error
 			return NotFound("Farewell attachment not found", err)
 		}
 		return Internal("Failed to fetch farewell attachment", err)
+	}
+	var letter models.FarewellLetter
+	if err := database.ForTenant(userID).First(&letter, "id = ?", attachment.LetterID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return NotFound("Farewell letter not found", err)
+		}
+		return Internal("Failed to fetch farewell letter", err)
+	}
+	if err := requireFarewellMessageNotTriggered(userID, letter.MessageID, "Cannot modify farewell attachments after the switch has triggered"); err != nil {
+		return err
 	}
 
 	if err := os.Remove(attachment.StoragePath); err != nil && !os.IsNotExist(err) {

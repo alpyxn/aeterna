@@ -95,6 +95,18 @@ export async function deleteFarewellLetter(messageId, letterId) {
 	});
 }
 
+export async function cancelFarewellLetter(messageId, letterId) {
+	return apiRequest(`/messages/${messageId}/farewell-letters/${letterId}/cancel`, {
+		method: "POST",
+	});
+}
+
+export async function cancelAllPendingFarewellLetters(messageId) {
+	return apiRequest(`/messages/${messageId}/farewell-letters/cancel-pending`, {
+		method: "POST",
+	});
+}
+
 export async function uploadFarewellAttachment(messageId, letterId, file) {
 	const formData = new FormData();
 	formData.append("file", file);
