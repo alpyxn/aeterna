@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import { Mail, Clock, Loader2, Trash2, Heart, AlertCircle, RefreshCw, Inbox, Eye, Pencil, Paperclip, X, Upload, Plus } from 'lucide-react';
-import { apiRequest, uploadFile, deleteAttachment, listAttachments } from "@/lib/api";
+import { apiRequest, uploadFile, deleteAttachment, listAttachments, openEventsStream } from "@/lib/api";
 import FarewellLetters from "@/components/FarewellLetters";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -28,6 +28,8 @@ export default function Dashboard() {
     const [refreshing, setRefreshing] = useState(false);
     const [actionLoading, setActionLoading] = useState(null);
     const [, setTick] = useState(0);
+    const eventRefreshTimeoutRef = useRef(null);
+    const fallbackPollIntervalRef = useRef(null);
 
     const fetchMessages = useCallback(async () => {
         try {
@@ -43,8 +45,63 @@ export default function Dashboard() {
 
     useEffect(() => {
         fetchMessages();
-        const interval = setInterval(fetchMessages, 30000);
-        return () => clearInterval(interval);
+
+        const stopFallbackPolling = () => {
+            if (fallbackPollIntervalRef.current) {
+                clearInterval(fallbackPollIntervalRef.current);
+                fallbackPollIntervalRef.current = null;
+            }
+        };
+
+        const startFallbackPolling = () => {
+            if (fallbackPollIntervalRef.current) return;
+            fallbackPollIntervalRef.current = setInterval(() => {
+                void fetchMessages();
+            }, 60000);
+        };
+
+        const clientId = (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function')
+            ? globalThis.crypto.randomUUID()
+            : `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        const stream = openEventsStream(clientId);
+
+        const scheduleRefresh = () => {
+            if (eventRefreshTimeoutRef.current) return;
+            eventRefreshTimeoutRef.current = setTimeout(async () => {
+                eventRefreshTimeoutRef.current = null;
+                await fetchMessages();
+            }, 300);
+        };
+
+        const handleEvent = (eventName) => {
+            stream.addEventListener(eventName, scheduleRefresh);
+        };
+
+        handleEvent('messages.changed');
+        handleEvent('attachments.changed');
+        handleEvent('farewells.changed');
+
+        stream.onopen = () => {
+            stopFallbackPolling();
+        };
+
+        stream.onerror = () => {
+            // EventSource reconnects automatically; enable fallback polling while disconnected.
+            startFallbackPolling();
+        };
+
+        // Keep fallback polling active until the SSE stream is confirmed as open.
+        startFallbackPolling();
+
+        return () => {
+            if (eventRefreshTimeoutRef.current) {
+                clearTimeout(eventRefreshTimeoutRef.current);
+                eventRefreshTimeoutRef.current = null;
+            }
+            stopFallbackPolling();
+            stream.close();
+        };
     }, [fetchMessages]);
 
     const handleRefresh = async () => {
@@ -298,8 +355,9 @@ export default function Dashboard() {
             return { text: 'TRIGGERED', className: 'text-red-400' };
         }
 
-        const lastSeen = new Date(message.last_seen);
-        const triggerTime = new Date(lastSeen.getTime() + message.trigger_duration * 60 * 1000);
+        const triggerTime = message.next_trigger_at
+            ? new Date(message.next_trigger_at)
+            : new Date(new Date(message.last_seen).getTime() + message.trigger_duration * 60 * 1000);
         const now = new Date();
         const remaining = triggerTime - now;
 

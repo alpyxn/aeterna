@@ -135,3 +135,13 @@ export async function deleteFarewellAttachment(messageId, letterId, attachmentId
 		{ method: "DELETE" }
 	);
 }
+
+export function openEventsStream(clientId = null) {
+	const params = new URLSearchParams();
+	if (clientId) {
+		params.set("client_id", clientId);
+	}
+	const query = params.toString();
+	const url = query ? buildApiUrl(`/events?${query}`) : buildApiUrl("/events");
+	return new EventSource(url, { withCredentials: true });
+}

@@ -106,8 +106,6 @@ func main() {
 		log.Fatal("Failed to create uploads directory: ", err)
 	}
 
-	handlers.SetIsProduction(cfg)
-
 	// --- Composition root: wire services ---
 	authSvc := services.NewAuthService(cfg)
 	messageSvc := services.MessageService{}
@@ -118,16 +116,25 @@ func main() {
 	webhookStore := services.NewWebhookStore(cfg)
 	userAdminSvc := services.NewUserAdminService(cfg)
 	farewellDerivationSvc := services.NewFarewellDerivationService()
+	eventStreamSvc := services.NewEventStreamService()
+
+	// Decorate mutating services with event emission.
+	messageSvcWithEvents := services.NewNotifyingMessageService(messageSvc, eventStreamSvc)
+	fileSvcWithEvents := services.NewNotifyingFileService(fileSvc, eventStreamSvc)
+	farewellSvcWithEvents := services.NewNotifyingFarewellService(farewellSvc, eventStreamSvc)
+	settingsSvcWithEvents := services.NewNotifyingSettingsService(settingsSvc, eventStreamSvc)
+	webhookStoreWithEvents := services.NewNotifyingWebhookStore(webhookStore, eventStreamSvc)
 
 	// --- Wire handlers ---
 	authH := handlers.NewAuthHandlers(authSvc, cfg)
-	messageH := handlers.NewMessageHandlers(messageSvc)
-	heartbeatH := handlers.NewHeartbeatHandlers(messageSvc, settingsSvc)
-	attachH := handlers.NewAttachmentHandlers(fileSvc)
-	settingsH := handlers.NewSettingsHandlers(settingsSvc, appSettingsSvc)
-	webhookH := handlers.NewWebhookHandlers(webhookStore)
-	farewellH := handlers.NewFarewellHandlers(farewellSvc, fileSvc)
+	messageH := handlers.NewMessageHandlers(messageSvcWithEvents)
+	heartbeatH := handlers.NewHeartbeatHandlers(messageSvcWithEvents, settingsSvc)
+	attachH := handlers.NewAttachmentHandlers(fileSvcWithEvents)
+	settingsH := handlers.NewSettingsHandlers(settingsSvcWithEvents, appSettingsSvc)
+	webhookH := handlers.NewWebhookHandlers(webhookStoreWithEvents)
+	farewellH := handlers.NewFarewellHandlers(farewellSvcWithEvents, fileSvcWithEvents)
 	usersH := handlers.NewUserHandlers(userAdminSvc)
+	eventsH := handlers.NewEventsHandlers(eventStreamSvc)
 
 	// --- Wire worker ---
 	w := worker.New(settingsSvc, webhookStore, fileSvc, farewellDerivationSvc, cfg)
@@ -136,6 +143,7 @@ func main() {
 		BodyLimit: 25 * 1024 * 1024,
 	})
 
+	app.Use(handlers.AttachRuntimeFlags(cfg.IsProduction()))
 	app.Use(requestid.New())
 	app.Use(logger.New(logger.Config{
 		Format: "{\"time\":\"${time}\",\"ip\":\"${ip}\",\"status\":${status},\"method\":\"${method}\",\"path\":\"${path}\",\"latency\":\"${latency}\",\"req_id\":\"${locals:requestid}\"}\n",
@@ -203,11 +211,11 @@ func main() {
 
 	// Protected routes
 	mgmt := api.Group("/", middleware.MasterAuth(authSvc, cfg))
-	registerProtectedRoutes(mgmt, messageH, attachH, farewellH, webhookH, settingsH, heartbeatH, usersH)
+	registerProtectedRoutes(mgmt, messageH, attachH, farewellH, webhookH, settingsH, heartbeatH, usersH, eventsH)
 
 	// Protected routes (v2, accepts Authorization: Bearer <token>)
 	mgmtV2 := apiV2.Group("/", middleware.MasterAuthV2(authSvc, cfg))
-	registerProtectedRoutes(mgmtV2, messageH, attachH, farewellH, webhookH, settingsH, heartbeatH, usersH)
+	registerProtectedRoutes(mgmtV2, messageH, attachH, farewellH, webhookH, settingsH, heartbeatH, usersH, eventsH)
 
 	go w.Start()
 
@@ -223,6 +231,7 @@ func registerProtectedRoutes(
 	settingsH *handlers.SettingsHandlers,
 	heartbeatH *handlers.HeartbeatHandlers,
 	usersH *handlers.UserHandlers,
+	eventsH *handlers.EventsHandlers,
 ) {
 	group.Post("/messages", messageH.Create)
 	group.Get("/messages", messageH.List)
@@ -256,4 +265,5 @@ func registerProtectedRoutes(
 
 	group.Get("/users", usersH.List)
 	group.Delete("/users/:id", usersH.Delete)
+	group.Get("/events", eventsH.Stream)
 }

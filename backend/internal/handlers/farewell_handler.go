@@ -56,6 +56,7 @@ func (h *FarewellHandlers) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	farewell := withOriginSession(c, h.farewell)
 	messageID := c.Params("id")
 
 	body, err := parseFarewellPayload(c)
@@ -63,7 +64,7 @@ func (h *FarewellHandlers) Create(c *fiber.Ctx) error {
 		return writeError(c, err)
 	}
 
-	letter, err := h.farewell.Create(
+	letter, err := farewell.Create(
 		userID,
 		messageID,
 		body.RecipientEmail,
@@ -74,7 +75,6 @@ func (h *FarewellHandlers) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
-
 	return c.Status(fiber.StatusCreated).JSON(letter)
 }
 
@@ -83,6 +83,7 @@ func (h *FarewellHandlers) Update(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	farewell := withOriginSession(c, h.farewell)
 	messageID := c.Params("id")
 	letterID := c.Params("letterId")
 
@@ -91,7 +92,7 @@ func (h *FarewellHandlers) Update(c *fiber.Ctx) error {
 		return writeError(c, err)
 	}
 
-	letter, err := h.farewell.Update(
+	letter, err := farewell.Update(
 		userID,
 		messageID,
 		letterID,
@@ -103,7 +104,6 @@ func (h *FarewellHandlers) Update(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
-
 	return c.JSON(letter)
 }
 
@@ -112,13 +112,13 @@ func (h *FarewellHandlers) Delete(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	farewell := withOriginSession(c, h.farewell)
 	messageID := c.Params("id")
 	letterID := c.Params("letterId")
 
-	if err := h.farewell.Delete(userID, messageID, letterID); err != nil {
+	if err := farewell.Delete(userID, messageID, letterID); err != nil {
 		return writeError(c, err)
 	}
-
 	return c.JSON(fiber.Map{"success": true, "message": "Farewell letter deleted"})
 }
 
@@ -127,13 +127,13 @@ func (h *FarewellHandlers) CancelPending(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	farewell := withOriginSession(c, h.farewell)
 	messageID := c.Params("id")
 	letterID := c.Params("letterId")
 
-	if err := h.farewell.CancelPending(userID, messageID, letterID); err != nil {
+	if err := farewell.CancelPending(userID, messageID, letterID); err != nil {
 		return writeError(c, err)
 	}
-
 	return c.JSON(fiber.Map{"success": true, "message": "Pending farewell letter canceled"})
 }
 
@@ -142,13 +142,13 @@ func (h *FarewellHandlers) CancelAllPending(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	farewell := withOriginSession(c, h.farewell)
 	messageID := c.Params("id")
 
-	count, err := h.farewell.CancelPendingByMessageID(userID, messageID)
+	count, err := farewell.CancelPendingByMessageID(userID, messageID)
 	if err != nil {
 		return writeError(c, err)
 	}
-
 	return c.JSON(fiber.Map{"success": true, "canceled": count})
 }
 
@@ -157,6 +157,7 @@ func (h *FarewellHandlers) UploadAttachment(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	files := withOriginSession(c, h.files)
 	letterID := c.Params("letterId")
 
 	fileHeader, err := c.FormFile("file")
@@ -180,11 +181,10 @@ func (h *FarewellHandlers) UploadAttachment(c *fiber.Ctx) error {
 		mimeType = "application/octet-stream"
 	}
 
-	attachment, err := h.files.UploadFarewellAttachment(userID, letterID, fileHeader.Filename, mimeType, data)
+	attachment, err := files.UploadFarewellAttachment(userID, letterID, fileHeader.Filename, mimeType, data)
 	if err != nil {
 		return writeError(c, err)
 	}
-
 	return c.JSON(fiber.Map{"success": true, "attachment": attachment})
 }
 
@@ -208,11 +208,11 @@ func (h *FarewellHandlers) DeleteAttachment(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	files := withOriginSession(c, h.files)
 	attachmentID := c.Params("attachmentId")
 
-	if err := h.files.DeleteFarewellAttachment(userID, attachmentID); err != nil {
+	if err := files.DeleteFarewellAttachment(userID, attachmentID); err != nil {
 		return writeError(c, err)
 	}
-
 	return c.JSON(fiber.Map{"success": true, "message": "Farewell attachment deleted"})
 }
