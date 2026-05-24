@@ -66,6 +66,7 @@ func main() {
 
 	if err := database.DB.AutoMigrate(
 		&models.User{},
+		&models.RefreshSession{},
 		&models.Message{},
 		&models.MessageReminder{},
 		&models.Settings{},
@@ -97,6 +98,9 @@ func main() {
 
 	database.DB.Exec("UPDATE messages SET encrypted_content = '' WHERE encrypted_content IS NULL;")
 	database.DB.Exec("UPDATE settings SET webhook_enabled = 0 WHERE webhook_enabled IS NULL;")
+	database.DB.Exec("UPDATE farewell_letters SET encrypted_content_raw = encrypted_content WHERE encrypted_content_raw IS NULL OR encrypted_content_raw = '';")
+	database.DB.Exec("UPDATE farewell_letters SET encrypted_rendered_html = '' WHERE encrypted_rendered_html IS NULL;")
+	database.DB.Exec("UPDATE farewell_letters SET derivatives_pending = 1 WHERE derivatives_pending IS NULL;")
 
 	if err := services.EnsureUploadsDir(cfg.Database.Path); err != nil {
 		log.Fatal("Failed to create uploads directory: ", err)
@@ -113,6 +117,7 @@ func main() {
 	appSettingsSvc := services.ApplicationSettingsService{}
 	webhookStore := services.NewWebhookStore(cfg)
 	userAdminSvc := services.NewUserAdminService(cfg)
+	farewellDerivationSvc := services.NewFarewellDerivationService()
 
 	// --- Wire handlers ---
 	authH := handlers.NewAuthHandlers(authSvc, cfg)
@@ -125,7 +130,7 @@ func main() {
 	usersH := handlers.NewUserHandlers(userAdminSvc)
 
 	// --- Wire worker ---
-	w := worker.New(settingsSvc, webhookStore, fileSvc, cfg)
+	w := worker.New(settingsSvc, webhookStore, fileSvc, farewellDerivationSvc, cfg)
 
 	app := fiber.New(fiber.Config{
 		BodyLimit: 25 * 1024 * 1024,
@@ -193,6 +198,7 @@ func main() {
 	apiV2.Post("/auth/login", middleware.AuthRateLimiter, authH.LoginV2)
 	apiV2.Post("/auth/reset-password", middleware.AuthRateLimiter, authH.ResetMasterPasswordV2)
 	apiV2.Get("/auth/session", authH.SessionStatusV2)
+	apiV2.Post("/auth/refresh", middleware.AuthRateLimiter, authH.RefreshV2)
 	apiV2.Post("/auth/logout", authH.LogoutV2)
 
 	// Protected routes

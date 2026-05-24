@@ -77,6 +77,9 @@ func TestLoad_DevelopmentMode(t *testing.T) {
 	t.Setenv("DATABASE_PATH", "")
 	t.Setenv("ALLOWED_ORIGINS", "")
 	t.Setenv("PROXY_MODE", "")
+	t.Setenv("AUTH_SESSION_TTL_HOURS", "")
+	t.Setenv("AUTH_REFRESH_TTL_HOURS", "")
+	t.Setenv("BASE_URL", "")
 
 	cfg := Load()
 
@@ -88,6 +91,9 @@ func TestLoad_DevelopmentMode(t *testing.T) {
 	}
 	if cfg.Auth.SessionTTLHours != common.DefaultSessionTTLHours {
 		t.Fatalf("Auth.SessionTTLHours = %d, want %d", cfg.Auth.SessionTTLHours, common.DefaultSessionTTLHours)
+	}
+	if cfg.Auth.RefreshTTLHours != common.DefaultRefreshTTLHours {
+		t.Fatalf("Auth.RefreshTTLHours = %d, want %d", cfg.Auth.RefreshTTLHours, common.DefaultRefreshTTLHours)
 	}
 	if cfg.Worker.BaseURL != common.DefaultWorkerBaseURL {
 		t.Fatalf("Worker.BaseURL = %q, want %q", cfg.Worker.BaseURL, common.DefaultWorkerBaseURL)

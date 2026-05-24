@@ -19,6 +19,7 @@ func TestAuthModule_Metadata(t *testing.T) {
 func TestAuthModule_LoadAndValidate(t *testing.T) {
 	t.Run("defaults when no env vars set", func(t *testing.T) {
 		t.Setenv("AUTH_SESSION_TTL_HOURS", "")
+		t.Setenv("AUTH_REFRESH_TTL_HOURS", "")
 		t.Setenv("ALLOW_REGISTRATION", "")
 		t.Setenv("MASTER_PASSWORD", "")
 		t.Setenv("AUTH_COOKIE_SECURE_MODE", "")
@@ -28,6 +29,9 @@ func TestAuthModule_LoadAndValidate(t *testing.T) {
 		}
 		if section.SessionTTLHours != common.DefaultSessionTTLHours {
 			t.Fatalf("SessionTTLHours = %d, want %d", section.SessionTTLHours, common.DefaultSessionTTLHours)
+		}
+		if section.RefreshTTLHours != common.DefaultRefreshTTLHours {
+			t.Fatalf("RefreshTTLHours = %d, want %d", section.RefreshTTLHours, common.DefaultRefreshTTLHours)
 		}
 		if section.AllowRegistration {
 			t.Fatal("AllowRegistration should default to false")
@@ -42,6 +46,7 @@ func TestAuthModule_LoadAndValidate(t *testing.T) {
 
 	t.Run("custom session TTL", func(t *testing.T) {
 		t.Setenv("AUTH_SESSION_TTL_HOURS", "48")
+		t.Setenv("AUTH_REFRESH_TTL_HOURS", "1440")
 		section, err := AuthModule{}.LoadAndValidate()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -49,38 +54,53 @@ func TestAuthModule_LoadAndValidate(t *testing.T) {
 		if section.SessionTTLHours != 48 {
 			t.Fatalf("SessionTTLHours = %d, want 48", section.SessionTTLHours)
 		}
+		if section.RefreshTTLHours != 1440 {
+			t.Fatalf("RefreshTTLHours = %d, want 1440", section.RefreshTTLHours)
+		}
 	})
 
 	t.Run("zero TTL falls back to default", func(t *testing.T) {
 		t.Setenv("AUTH_SESSION_TTL_HOURS", "0")
+		t.Setenv("AUTH_REFRESH_TTL_HOURS", "0")
 		section, err := AuthModule{}.LoadAndValidate()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if section.SessionTTLHours != common.DefaultSessionTTLHours {
 			t.Fatalf("SessionTTLHours = %d, want default %d", section.SessionTTLHours, common.DefaultSessionTTLHours)
+		}
+		if section.RefreshTTLHours != common.DefaultRefreshTTLHours {
+			t.Fatalf("RefreshTTLHours = %d, want default %d", section.RefreshTTLHours, common.DefaultRefreshTTLHours)
 		}
 	})
 
 	t.Run("negative TTL falls back to default", func(t *testing.T) {
 		t.Setenv("AUTH_SESSION_TTL_HOURS", "-1")
+		t.Setenv("AUTH_REFRESH_TTL_HOURS", "-1")
 		section, err := AuthModule{}.LoadAndValidate()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if section.SessionTTLHours != common.DefaultSessionTTLHours {
 			t.Fatalf("SessionTTLHours = %d, want default %d", section.SessionTTLHours, common.DefaultSessionTTLHours)
+		}
+		if section.RefreshTTLHours != common.DefaultRefreshTTLHours {
+			t.Fatalf("RefreshTTLHours = %d, want default %d", section.RefreshTTLHours, common.DefaultRefreshTTLHours)
 		}
 	})
 
 	t.Run("invalid TTL string falls back to default", func(t *testing.T) {
 		t.Setenv("AUTH_SESSION_TTL_HOURS", "not-a-number")
+		t.Setenv("AUTH_REFRESH_TTL_HOURS", "not-a-number")
 		section, err := AuthModule{}.LoadAndValidate()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if section.SessionTTLHours != common.DefaultSessionTTLHours {
 			t.Fatalf("SessionTTLHours = %d, want default %d", section.SessionTTLHours, common.DefaultSessionTTLHours)
+		}
+		if section.RefreshTTLHours != common.DefaultRefreshTTLHours {
+			t.Fatalf("RefreshTTLHours = %d, want default %d", section.RefreshTTLHours, common.DefaultRefreshTTLHours)
 		}
 	})
 
@@ -118,9 +138,9 @@ func TestAuthModule_LoadAndValidate(t *testing.T) {
 	})
 
 	cookieModeTests := []struct {
-		name       string
-		input      string
-		wantMode   string
+		name     string
+		input    string
+		wantMode string
 	}{
 		{"always mode", "always", "always"},
 		{"never mode", "never", "never"},

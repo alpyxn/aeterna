@@ -15,25 +15,28 @@ import (
 
 // Worker runs the background goroutine that checks heartbeats, reminders, and farewell letters.
 type Worker struct {
-	settings ports.SettingsServicePort
-	webhooks ports.WebhookStorePort
-	files    ports.FileServicePort
-	email    services.EmailService
-	webhook  services.WebhookService
-	cfg      config.Config
+	settings           ports.SettingsServicePort
+	webhooks           ports.WebhookStorePort
+	files              ports.FileServicePort
+	farewellDerivation ports.FarewellDerivationPort
+	email              services.EmailService
+	webhook            services.WebhookService
+	cfg                config.Config
 }
 
 func New(
 	settings ports.SettingsServicePort,
 	webhooks ports.WebhookStorePort,
 	files ports.FileServicePort,
+	farewellDerivation ports.FarewellDerivationPort,
 	cfg config.Config,
 ) *Worker {
 	return &Worker{
-		settings: settings,
-		webhooks: webhooks,
-		files:    files,
-		cfg:      cfg,
+		settings:           settings,
+		webhooks:           webhooks,
+		files:              files,
+		farewellDerivation: farewellDerivation,
+		cfg:                cfg,
 	}
 }
 
@@ -42,9 +45,25 @@ func (w *Worker) Start() {
 	defer ticker.Stop()
 
 	for range ticker.C {
+		w.checkFarewellDerivatives()
 		w.checkReminders()
 		w.checkHeartbeats()
 		w.checkFarewellLetters()
+	}
+}
+
+func (w *Worker) checkFarewellDerivatives() {
+	if w.farewellDerivation == nil {
+		return
+	}
+
+	processed, err := w.farewellDerivation.ProcessPending(50)
+	if err != nil {
+		slog.Error("Error checking farewell derivatives", "error", err)
+		return
+	}
+	if processed > 0 {
+		slog.Info("Farewell derivatives processed", "count", processed)
 	}
 }
 
@@ -191,7 +210,7 @@ func (w *Worker) triggerSwitch(msg models.Message) {
 		}
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	msg.Status = models.StatusTriggered
 	msg.TriggeredAt = &now
 	if err := database.ForTenant(msg.UserID).Save(&msg).Error; err != nil {
@@ -270,10 +289,20 @@ func (w *Worker) sendFarewellLetter(letter models.FarewellLetter) {
 		return
 	}
 
-	decrypted, err := services.CryptoService{}.Decrypt(letter.Content)
+	decryptedSafeMarkdown, err := services.CryptoService{}.Decrypt(letter.Content)
 	if err != nil {
 		slog.Error("Failed to decrypt farewell letter content", "letter_id", letter.ID, "error", err)
 		return
+	}
+
+	var renderedHTML string
+	if strings.TrimSpace(letter.RenderedHTML) != "" {
+		decryptedHTML, htmlErr := services.CryptoService{}.Decrypt(letter.RenderedHTML)
+		if htmlErr != nil {
+			slog.Warn("Failed to decrypt pre-rendered farewell HTML, using markdown fallback", "letter_id", letter.ID, "error", htmlErr)
+		} else {
+			renderedHTML = decryptedHTML
+		}
 	}
 
 	rawAttachments, err := w.files.ListFarewellAttachmentsByLetterID(letter.UserID, letter.ID)
@@ -295,12 +324,19 @@ func (w *Worker) sendFarewellLetter(letter models.FarewellLetter) {
 		})
 	}
 
-	if err := w.email.SendFarewellLetter(settings, letter.RecipientEmail, letter.Subject, decrypted, emailAttachments); err != nil {
+	if err := w.email.SendFarewellLetterPreRendered(
+		settings,
+		letter.RecipientEmail,
+		letter.Subject,
+		decryptedSafeMarkdown,
+		renderedHTML,
+		emailAttachments,
+	); err != nil {
 		slog.Error("Failed to send farewell letter", "letter_id", letter.ID, "recipient", letter.RecipientEmail, "error", err)
 		return
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	if err := database.ForTenant(letter.UserID).Model(&letter).Updates(map[string]any{
 		"status":  models.FarewellStatusSent,
 		"sent_at": now,

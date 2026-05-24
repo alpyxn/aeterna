@@ -29,6 +29,32 @@ type farewellCountRow struct {
 	PendingFarewells int64
 }
 
+func enrichMessageSchedule(msg *models.Message) {
+	if msg == nil {
+		return
+	}
+
+	triggerAt := msg.LastSeen.UTC().Add(time.Duration(msg.TriggerDuration) * time.Minute)
+	triggerAtUTC := triggerAt.UTC()
+	msg.NextTriggerAt = &triggerAtUTC
+	msg.NextReminderAt = nil
+
+	if msg.Status != models.StatusActive {
+		return
+	}
+
+	for _, reminder := range msg.Reminders {
+		if reminder.Sent {
+			continue
+		}
+		candidate := triggerAt.Add(-time.Duration(reminder.MinutesBefore) * time.Minute).UTC()
+		if msg.NextReminderAt == nil || candidate.Before(*msg.NextReminderAt) {
+			candidateUTC := candidate
+			msg.NextReminderAt = &candidateUTC
+		}
+	}
+}
+
 func (s MessageService) Create(userID string, content string, recipientEmails []string, triggerDuration int, reminders []int) (models.Message, error) {
 	settings, err := msgSettingsService.Get(userID)
 	if err != nil {
@@ -79,7 +105,7 @@ func (s MessageService) Create(userID string, content string, recipientEmails []
 		KeyFragment:     "v1",
 		RecipientEmail:  normalizedRecipients,
 		TriggerDuration: triggerDuration,
-		LastSeen:        time.Now(),
+		LastSeen:        time.Now().UTC(),
 		Status:          models.StatusActive,
 	}
 
@@ -107,6 +133,7 @@ func (s MessageService) Create(userID string, content string, recipientEmails []
 	}
 
 	msg.Content = content
+	enrichMessageSchedule(&msg)
 	return msg, nil
 }
 
@@ -147,6 +174,7 @@ func (s MessageService) GetByID(userID, id string) (models.Message, error) {
 
 	count, _ := msgFileService.CountByMessageID(userID, id)
 	msg.AttachmentCount = count
+	enrichMessageSchedule(&msg)
 
 	return msg, nil
 }
@@ -205,6 +233,7 @@ func (s MessageService) List(userID string) ([]models.Message, error) {
 			messages[i].FarewellCount = fc.Total
 			messages[i].PendingFarewells = fc.PendingFarewells
 		}
+		enrichMessageSchedule(&messages[i])
 	}
 
 	return messages, nil
@@ -223,10 +252,11 @@ func (s MessageService) Heartbeat(userID, id string) (models.Message, error) {
 		return models.Message{}, BadRequest("Cannot send heartbeat to a triggered message. The message has already been delivered.", nil)
 	}
 
-	msg.LastSeen = time.Now()
+	msg.LastSeen = time.Now().UTC()
 	if err := database.ForTenant(userID).Save(&msg).Error; err != nil {
 		return models.Message{}, Internal("Failed to update heartbeat", err)
 	}
+	enrichMessageSchedule(&msg)
 
 	return msg, nil
 }
@@ -320,7 +350,7 @@ func (s MessageService) Update(userID, id, content string, recipientEmails []str
 
 	msg.Content = encrypted
 	msg.TriggerDuration = triggerDuration
-	msg.LastSeen = time.Now()
+	msg.LastSeen = time.Now().UTC()
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		if err := database.TenantTx(tx, userID).Save(&msg).Error; err != nil {
 			return Internal("Failed to update message", err)
@@ -351,5 +381,6 @@ func (s MessageService) Update(userID, id, content string, recipientEmails []str
 	}
 
 	msg.Content = content
+	enrichMessageSchedule(&msg)
 	return msg, nil
 }

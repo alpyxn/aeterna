@@ -34,7 +34,8 @@ func MasterAuth(auth ports.AuthServicePort, cfg config.Config) fiber.Handler {
 				if !enforceOriginAllowlist(c, allowedOrigins, isProd) {
 					return nil
 				}
-				c.Locals("user_id", userID)
+				c.Locals(LocalUserIDKey, userID)
+				c.Locals(LocalSessionKey, SessionKeyFromToken(token))
 				return c.Next()
 			}
 			clearSessionCookieWith(c, cookieSecureMode)

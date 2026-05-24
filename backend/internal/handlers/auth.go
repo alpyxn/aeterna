@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"time"
 
 	"github.com/alpyxn/aeterna/backend/internal/config"
@@ -25,6 +26,10 @@ type resetPasswordRequest struct {
 	Email       string `json:"email"`
 	RecoveryKey string `json:"recovery_key"`
 	NewPassword string `json:"new_password"`
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
 }
 
 type sessionMode int
@@ -184,12 +189,38 @@ func (h *AuthHandlers) SessionStatusV2(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"authorized": true, "user_id": userID})
 }
 
+func (h *AuthHandlers) RefreshV2(c *fiber.Ctx) error {
+	var req refreshRequest
+	if len(c.Body()) > 0 {
+		if err := c.BodyParser(&req); err != nil {
+			return writeError(c, services.BadRequest("Invalid request body", err))
+		}
+	}
+	if strings.TrimSpace(req.RefreshToken) == "" {
+		return writeError(c, services.NewAPIError(401, "unauthorized", "Invalid refresh token.", nil))
+	}
+	userID, accessToken, accessExp, nextRefreshToken, nextRefreshExp, err := h.auth.RefreshSessionPair(req.RefreshToken)
+	if err != nil {
+		return writeError(c, err)
+	}
+	return c.JSON(bearerSessionPayload(userID, accessToken, accessExp, nextRefreshToken, nextRefreshExp))
+}
+
 func (h *AuthHandlers) Logout(c *fiber.Ctx) error {
 	h.clearSessionCookie(c)
 	return c.JSON(fiber.Map{"success": true})
 }
 
 func (h *AuthHandlers) LogoutV2(c *fiber.Ctx) error {
+	var req refreshRequest
+	if len(c.Body()) > 0 {
+		if err := c.BodyParser(&req); err != nil {
+			return writeError(c, services.BadRequest("Invalid request body", err))
+		}
+	}
+	if revokeErr := h.auth.RevokeRefreshToken(req.RefreshToken); revokeErr != nil {
+		return writeError(c, revokeErr)
+	}
 	h.clearSessionCookie(c)
 	return c.JSON(fiber.Map{"success": true})
 }
@@ -240,17 +271,23 @@ func (h *AuthHandlers) sessionPayload(c *fiber.Ctx, userID string, mode sessionM
 }
 
 func (h *AuthHandlers) issueSessionPayload(userID string) (fiber.Map, error) {
-	token, exp, err := h.auth.IssueSessionToken(userID)
+	accessToken, accessExp, refreshToken, refreshExp, err := h.auth.IssueSessionPair(userID)
 	if err != nil {
 		return nil, err
 	}
+	return bearerSessionPayload(userID, accessToken, accessExp, refreshToken, refreshExp), nil
+}
+
+func bearerSessionPayload(userID, accessToken string, accessExp time.Time, refreshToken string, refreshExp time.Time) fiber.Map {
 	return fiber.Map{
-		"success":      true,
-		"user_id":      userID,
-		"token_type":   "Bearer",
-		"access_token": token,
-		"expires_at":   exp.UTC().Format(time.RFC3339),
-	}, nil
+		"success":            true,
+		"user_id":            userID,
+		"token_type":         "Bearer",
+		"access_token":       accessToken,
+		"expires_at":         accessExp.UTC().Format(time.RFC3339),
+		"refresh_token":      refreshToken,
+		"refresh_expires_at": refreshExp.UTC().Format(time.RFC3339),
+	}
 }
 
 func (h *AuthHandlers) issueSessionCookie(c *fiber.Ctx, userID string) error {

@@ -13,6 +13,9 @@ type AuthServicePort interface {
 	RegisterAdditionalUser(email, password, ownerEmail string) (recoveryKey string, user models.User, err error)
 	Login(email, password string) (models.User, error)
 	IssueSessionToken(userID string) (string, time.Time, error)
+	IssueSessionPair(userID string) (accessToken string, accessExp time.Time, refreshToken string, refreshExp time.Time, err error)
+	RefreshSessionPair(refreshToken string) (userID, accessToken string, accessExp time.Time, nextRefreshToken string, nextRefreshExp time.Time, err error)
+	RevokeRefreshToken(refreshToken string) error
 	VerifySessionToken(token string) (userID string, err error)
 	ResetPasswordWithRecovery(email, recoveryKey, newPassword string) (newRecoveryKey string, err error)
 	AdditionalRegistrationOpen() (bool, error)
@@ -54,6 +57,11 @@ type FarewellServicePort interface {
 	Delete(userID, messageID, id string) error
 	CancelPending(userID, messageID, id string) error
 	CancelPendingByMessageID(userID, messageID string) (int64, error)
+}
+
+// FarewellDerivationPort covers background derivation of sanitized/rendered farewell content.
+type FarewellDerivationPort interface {
+	ProcessPending(batchSize int) (processed int, err error)
 }
 
 // SettingsServicePort covers per-user SMTP and heartbeat token configuration.
