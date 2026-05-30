@@ -197,3 +197,87 @@ func TestRefreshSessionPair_AllowsSingleConcurrentUse(t *testing.T) {
 		t.Fatalf("expected exactly one success and one failure, got successes=%d failures=%d", successes, failures)
 	}
 }
+
+func TestIssueSessionPair_CleansUpExpiredAndOldRevokedSessions(t *testing.T) {
+	db := setupAuthTestDB(t)
+	initTestKeyManager(t)
+
+	activeUser := createAuthTestUser(t, db, "u-clean-active", "active@example.com", "StrongPass1!")
+	otherUser := createAuthTestUser(t, db, "u-clean-other", "other@example.com", "StrongPass1!")
+	now := time.Now().UTC()
+	oldRevokedAt := now.Add(-48 * time.Hour)
+	recentRevokedAt := now.Add(-2 * time.Hour)
+
+	sessions := []models.RefreshSession{
+		{
+			UserID:    activeUser.ID,
+			TokenHash: "cleanup-expired",
+			ExpiresAt: now.Add(-1 * time.Hour),
+		},
+		{
+			UserID:    activeUser.ID,
+			TokenHash: "cleanup-old-revoked",
+			ExpiresAt: now.Add(24 * time.Hour),
+			RevokedAt: &oldRevokedAt,
+		},
+		{
+			UserID:    activeUser.ID,
+			TokenHash: "cleanup-recent-revoked",
+			ExpiresAt: now.Add(24 * time.Hour),
+			RevokedAt: &recentRevokedAt,
+		},
+		{
+			UserID:    otherUser.ID,
+			TokenHash: "cleanup-other-user-active",
+			ExpiresAt: now.Add(24 * time.Hour),
+		},
+	}
+	for _, session := range sessions {
+		if err := db.Create(&session).Error; err != nil {
+			t.Fatalf("failed to seed refresh session %q: %v", session.TokenHash, err)
+		}
+	}
+
+	svc := NewAuthService(config.Config{
+		Auth: config.AuthConfig{
+			SessionTTLHours: 1,
+			RefreshTTLHours: 24,
+		},
+	})
+
+	if _, _, _, _, err := svc.IssueSessionPair(activeUser.ID); err != nil {
+		t.Fatalf("IssueSessionPair failed: %v", err)
+	}
+
+	var expiredCount int64
+	if err := db.Model(&models.RefreshSession{}).Where("token_hash = ?", "cleanup-expired").Count(&expiredCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if expiredCount != 0 {
+		t.Fatalf("expected expired refresh session to be deleted, found %d rows", expiredCount)
+	}
+
+	var oldRevokedCount int64
+	if err := db.Model(&models.RefreshSession{}).Where("token_hash = ?", "cleanup-old-revoked").Count(&oldRevokedCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if oldRevokedCount != 0 {
+		t.Fatalf("expected old revoked refresh session to be deleted, found %d rows", oldRevokedCount)
+	}
+
+	var recentRevokedCount int64
+	if err := db.Model(&models.RefreshSession{}).Where("token_hash = ?", "cleanup-recent-revoked").Count(&recentRevokedCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if recentRevokedCount != 1 {
+		t.Fatalf("expected recent revoked refresh session to remain, found %d rows", recentRevokedCount)
+	}
+
+	var otherActiveCount int64
+	if err := db.Model(&models.RefreshSession{}).Where("token_hash = ?", "cleanup-other-user-active").Count(&otherActiveCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if otherActiveCount != 1 {
+		t.Fatalf("expected active session for another user to remain, found %d rows", otherActiveCount)
+	}
+}

@@ -192,6 +192,10 @@ func (s AuthService) RevokeRefreshToken(refreshToken string) error {
 }
 
 func (s AuthService) issueRefreshSession(db *gorm.DB, userID string) (string, time.Time, error) {
+	if err := s.cleanupRefreshSessions(db, time.Now().UTC()); err != nil {
+		return "", time.Time{}, err
+	}
+
 	token, err := cryptoService.GenerateToken(48)
 	if err != nil {
 		return "", time.Time{}, err
@@ -206,6 +210,18 @@ func (s AuthService) issueRefreshSession(db *gorm.DB, userID string) (string, ti
 		return "", time.Time{}, Internal("Failed to create refresh session", err)
 	}
 	return token, exp, nil
+}
+
+func (s AuthService) cleanupRefreshSessions(db *gorm.DB, now time.Time) error {
+	revokedCutoff := now.Add(-refreshRevokedRetention)
+	if err := db.Where(
+		"expires_at <= ? OR (revoked_at IS NOT NULL AND revoked_at <= ?)",
+		now,
+		revokedCutoff,
+	).Delete(&models.RefreshSession{}).Error; err != nil {
+		return Internal("Failed to cleanup refresh sessions", err)
+	}
+	return nil
 }
 
 // VerifySessionToken validates the cookie token and returns the authenticated user ID.

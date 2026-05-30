@@ -24,7 +24,7 @@ type FarewellLetter struct {
 	RawContent         string               `gorm:"column:encrypted_content_raw;not null;default:''" json:"-"`
 	RenderedHTML       string               `gorm:"column:encrypted_rendered_html;not null;default:''" json:"-"`
 	WordCount          int                  `gorm:"not null;default:0" json:"word_count"`
-	DerivativesPending bool                 `gorm:"column:derivatives_pending;not null;default:1" json:"-"`
+	DerivativesPending bool                 `gorm:"column:derivatives_pending;not null;default:1" json:"derivatives_pending"`
 	DelayMinutes       int                  `gorm:"not null" json:"delay_minutes"`
 	Status             FarewellLetterStatus `gorm:"default:'pending'" json:"status"`
 	SentAt             *time.Time           `json:"sent_at,omitempty"`
