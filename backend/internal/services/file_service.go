@@ -178,7 +178,7 @@ func (s FileService) GetDecrypted(userID, attachmentID string) (filename, mimeTy
 
 // ListByMessageID returns all attachments for a message within a tenant
 func (s FileService) ListByMessageID(userID, messageID string) ([]models.Attachment, error) {
-	var attachments []models.Attachment
+	attachments := make([]models.Attachment, 0)
 	if err := database.ForTenant(userID).Where("message_id = ?", messageID).Order("created_at ASC").Find(&attachments).Error; err != nil {
 		return nil, Internal("Failed to fetch attachments", err)
 	}
@@ -265,7 +265,7 @@ func (s FileService) UploadFarewellAttachment(userID, letterID, filename, mimeTy
 
 // ListFarewellAttachmentsByLetterID returns all attachments for a farewell letter.
 func (s FileService) ListFarewellAttachmentsByLetterID(userID, letterID string) ([]models.FarewellAttachment, error) {
-	var attachments []models.FarewellAttachment
+	attachments := make([]models.FarewellAttachment, 0)
 	if err := database.ForTenant(userID).Where("letter_id = ?", letterID).Order("created_at ASC").Find(&attachments).Error; err != nil {
 		return nil, Internal("Failed to fetch farewell attachments", err)
 	}

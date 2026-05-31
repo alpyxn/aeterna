@@ -25,6 +25,8 @@ type Message struct {
 	LastSeen         time.Time         `gorm:"not null;default:CURRENT_TIMESTAMP" json:"last_seen"`
 	Status           MessageStatus     `gorm:"default:'active'" json:"status"`
 	TriggeredAt      *time.Time        `json:"triggered_at,omitempty"`
+	NextTriggerAt    *time.Time        `gorm:"-" json:"next_trigger_at,omitempty"`
+	NextReminderAt   *time.Time        `gorm:"-" json:"next_reminder_at,omitempty"`
 	Reminders        []MessageReminder `gorm:"foreignKey:MessageID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;" json:"reminders"`
 	CreatedAt        time.Time         `json:"created_at"`
 	UpdatedAt        time.Time         `json:"updated_at"`

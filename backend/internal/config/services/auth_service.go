@@ -20,6 +20,7 @@ func init() {
 
 type AuthSection struct {
 	SessionTTLHours   int
+	RefreshTTLHours   int
 	AllowRegistration bool
 	MasterPassword    string
 	CookieSecureMode  string
@@ -35,6 +36,7 @@ func (AuthModule) LoadAndValidate() (AuthSection, error) {
 
 	return AuthSection{
 		SessionTTLHours:   common.GetPositiveInt("AUTH_SESSION_TTL_HOURS", common.DefaultSessionTTLHours),
+		RefreshTTLHours:   common.GetPositiveInt("AUTH_REFRESH_TTL_HOURS", common.DefaultRefreshTTLHours),
 		AllowRegistration: os.Getenv("ALLOW_REGISTRATION") == "true",
 		MasterPassword:    os.Getenv("MASTER_PASSWORD"),
 		CookieSecureMode:  cookieMode,

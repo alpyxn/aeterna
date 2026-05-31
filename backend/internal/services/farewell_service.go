@@ -40,26 +40,37 @@ func (s FarewellService) Create(userID, messageID, recipientEmail, subject, cont
 		return models.FarewellLetter{}, BadRequest("Delay must be zero or positive", nil)
 	}
 
-	encrypted, err := farewellCrypto.Encrypt(content)
+	safeMarkdown := sanitizeFarewellMarkdown(content)
+
+	encryptedSafe, err := farewellCrypto.Encrypt(safeMarkdown)
+	if err != nil {
+		return models.FarewellLetter{}, err
+	}
+
+	encryptedRaw, err := farewellCrypto.Encrypt(content)
 	if err != nil {
 		return models.FarewellLetter{}, err
 	}
 
 	letter := models.FarewellLetter{
-		UserID:         userID,
-		MessageID:      messageID,
-		RecipientEmail: recipientEmail,
-		Subject:        subject,
-		Content:        encrypted,
-		DelayMinutes:   delayMinutes,
-		Status:         models.FarewellStatusPending,
+		UserID:             userID,
+		MessageID:          messageID,
+		RecipientEmail:     recipientEmail,
+		Subject:            subject,
+		Content:            encryptedSafe,
+		RawContent:         encryptedRaw,
+		RenderedHTML:       "",
+		WordCount:          0,
+		DerivativesPending: true,
+		DelayMinutes:       delayMinutes,
+		Status:             models.FarewellStatusPending,
 	}
 
 	if err := database.ForTenant(userID).Create(&letter).Error; err != nil {
 		return models.FarewellLetter{}, Internal("Failed to create farewell letter", err)
 	}
 
-	letter.Content = content
+	letter.Content = safeMarkdown
 	return letter, nil
 }
 
@@ -68,7 +79,7 @@ func (s FarewellService) List(userID, messageID string) ([]models.FarewellLetter
 		return nil, err
 	}
 
-	var letters []models.FarewellLetter
+	letters := make([]models.FarewellLetter, 0)
 	if err := database.ForTenant(userID).Where("message_id = ?", messageID).Order("created_at ASC").Find(&letters).Error; err != nil {
 		return nil, Internal("Failed to fetch farewell letters", err)
 	}
@@ -120,21 +131,32 @@ func (s FarewellService) Update(userID, messageID, id, recipientEmail, subject, 
 		return models.FarewellLetter{}, BadRequest("Delay must be zero or positive", nil)
 	}
 
-	encrypted, err := farewellCrypto.Encrypt(content)
+	safeMarkdown := sanitizeFarewellMarkdown(content)
+
+	encryptedSafe, err := farewellCrypto.Encrypt(safeMarkdown)
+	if err != nil {
+		return models.FarewellLetter{}, err
+	}
+
+	encryptedRaw, err := farewellCrypto.Encrypt(content)
 	if err != nil {
 		return models.FarewellLetter{}, err
 	}
 
 	letter.RecipientEmail = recipientEmail
 	letter.Subject = subject
-	letter.Content = encrypted
+	letter.Content = encryptedSafe
+	letter.RawContent = encryptedRaw
+	letter.RenderedHTML = ""
+	letter.WordCount = 0
+	letter.DerivativesPending = true
 	letter.DelayMinutes = delayMinutes
 
 	if err := database.ForTenant(userID).Save(&letter).Error; err != nil {
 		return models.FarewellLetter{}, Internal("Failed to update farewell letter", err)
 	}
 
-	letter.Content = content
+	letter.Content = safeMarkdown
 	return letter, nil
 }
 

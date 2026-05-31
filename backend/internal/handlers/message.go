@@ -97,7 +97,12 @@ func (h *MessageHandlers) Heartbeat(c *fiber.Ctx) error {
 		return writeError(c, err)
 	}
 
-	return c.JSON(fiber.Map{"status": "alive", "last_seen": msg.LastSeen})
+	return c.JSON(fiber.Map{
+		"status":           "alive",
+		"last_seen":        msg.LastSeen,
+		"next_trigger_at":  msg.NextTriggerAt,
+		"next_reminder_at": msg.NextReminderAt,
+	})
 }
 
 func (h *MessageHandlers) List(c *fiber.Ctx) error {

@@ -2,6 +2,7 @@ package services
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/alpyxn/aeterna/backend/internal/config"
+	"github.com/alpyxn/aeterna/backend/internal/config/common"
 	"github.com/alpyxn/aeterna/backend/internal/database"
 	"github.com/alpyxn/aeterna/backend/internal/models"
 	"golang.org/x/crypto/bcrypt"
@@ -30,6 +32,19 @@ type sessionClaims struct {
 	Iat    int64  `json:"iat"`
 	UserID string `json:"uid"`
 	Hash   string `json:"hash,omitempty"`
+}
+
+func (s AuthService) refreshTTL() time.Duration {
+	ttlHours := s.cfg.Auth.RefreshTTLHours
+	if ttlHours <= 0 {
+		ttlHours = common.DefaultRefreshTTLHours
+	}
+	return time.Duration(ttlHours) * time.Hour
+}
+
+func refreshTokenHash(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
 
 func (s AuthService) passwordHashPrefixForUser(userID string) (string, error) {
@@ -76,6 +91,139 @@ func (s AuthService) IssueSessionToken(userID string) (string, time.Time, error)
 	return token, exp, nil
 }
 
+func (s AuthService) IssueSessionPair(userID string) (accessToken string, accessExp time.Time, refreshToken string, refreshExp time.Time, err error) {
+	accessToken, accessExp, err = s.IssueSessionToken(userID)
+	if err != nil {
+		return "", time.Time{}, "", time.Time{}, err
+	}
+	refreshToken, refreshExp, err = s.issueRefreshSession(database.DB, userID)
+	if err != nil {
+		return "", time.Time{}, "", time.Time{}, err
+	}
+	return accessToken, accessExp, refreshToken, refreshExp, nil
+}
+
+func (s AuthService) RefreshSessionPair(refreshToken string) (userID, accessToken string, accessExp time.Time, nextRefreshToken string, nextRefreshExp time.Time, err error) {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return "", "", time.Time{}, "", time.Time{}, NewAPIError(401, "unauthorized", "Invalid refresh token.", nil)
+	}
+
+	currentHash := refreshTokenHash(refreshToken)
+	var current models.RefreshSession
+	if err := database.DB.Where("token_hash = ?", currentHash).First(&current).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", "", time.Time{}, "", time.Time{}, NewAPIError(401, "unauthorized", "Invalid refresh token.", nil)
+		}
+		return "", "", time.Time{}, "", time.Time{}, Internal("Failed to load refresh session", err)
+	}
+	if current.RevokedAt != nil {
+		return "", "", time.Time{}, "", time.Time{}, NewAPIError(401, "unauthorized", "Refresh token has been revoked.", nil)
+	}
+	if time.Now().UTC().After(current.ExpiresAt) {
+		return "", "", time.Time{}, "", time.Time{}, NewAPIError(401, "unauthorized", "Refresh token has expired.", nil)
+	}
+
+	accessToken, accessExp, err = s.IssueSessionToken(current.UserID)
+	if err != nil {
+		return "", "", time.Time{}, "", time.Time{}, err
+	}
+
+	userID = current.UserID
+	err = database.DB.Transaction(func(tx *gorm.DB) error {
+		now := time.Now().UTC()
+		revokeResult := tx.Model(&models.RefreshSession{}).
+			Where("id = ? AND revoked_at IS NULL AND expires_at > ?", current.ID, now).
+			Update("revoked_at", now)
+		if revokeResult.Error != nil {
+			return Internal("Failed to revoke refresh session", revokeResult.Error)
+		}
+		if revokeResult.RowsAffected != 1 {
+			return NewAPIError(401, "unauthorized", "Invalid refresh token.", nil)
+		}
+
+		token, exp, issueErr := s.issueRefreshSession(tx, current.UserID)
+		if issueErr != nil {
+			return issueErr
+		}
+		nextRefreshToken = token
+		nextRefreshExp = exp
+
+		current.ReplacedByTokenHash = refreshTokenHash(nextRefreshToken)
+		if err := tx.Model(&models.RefreshSession{}).
+			Where("id = ?", current.ID).
+			Update("replaced_by_token_hash", current.ReplacedByTokenHash).Error; err != nil {
+			return Internal("Failed to link rotated refresh session", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", "", time.Time{}, "", time.Time{}, err
+	}
+
+	return userID, accessToken, accessExp, nextRefreshToken, nextRefreshExp, nil
+}
+
+func (s AuthService) RevokeRefreshToken(refreshToken string) error {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil
+	}
+	hash := refreshTokenHash(refreshToken)
+	now := time.Now().UTC()
+	return database.DB.Transaction(func(tx *gorm.DB) error {
+		var session models.RefreshSession
+		if err := tx.Where("token_hash = ?", hash).First(&session).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil
+			}
+			return Internal("Failed to load refresh session", err)
+		}
+		if session.RevokedAt != nil {
+			return nil
+		}
+		if err := tx.Model(&models.RefreshSession{}).
+			Where("id = ?", session.ID).
+			Update("revoked_at", now).Error; err != nil {
+			return Internal("Failed to revoke refresh session", err)
+		}
+		return nil
+	})
+}
+
+func (s AuthService) issueRefreshSession(db *gorm.DB, userID string) (string, time.Time, error) {
+	if err := s.cleanupRefreshSessions(db, time.Now().UTC()); err != nil {
+		return "", time.Time{}, err
+	}
+
+	token, err := cryptoService.GenerateToken(48)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	exp := time.Now().UTC().Add(s.refreshTTL())
+	record := models.RefreshSession{
+		UserID:    userID,
+		TokenHash: refreshTokenHash(token),
+		ExpiresAt: exp,
+	}
+	if err := db.Create(&record).Error; err != nil {
+		return "", time.Time{}, Internal("Failed to create refresh session", err)
+	}
+	return token, exp, nil
+}
+
+func (s AuthService) cleanupRefreshSessions(db *gorm.DB, now time.Time) error {
+	revokedCutoff := now.Add(-refreshRevokedRetention)
+	if err := db.Where(
+		"expires_at <= ? OR (revoked_at IS NOT NULL AND revoked_at <= ?)",
+		now,
+		revokedCutoff,
+	).Delete(&models.RefreshSession{}).Error; err != nil {
+		return Internal("Failed to cleanup refresh sessions", err)
+	}
+	return nil
+}
+
 // VerifySessionToken validates the cookie token and returns the authenticated user ID.
 func (s AuthService) VerifySessionToken(token string) (userID string, err error) {
 	if token == "" {
@@ -114,7 +262,11 @@ func (s AuthService) VerifySessionToken(token string) (userID string, err error)
 }
 
 func (s AuthService) sessionTTL() time.Duration {
-	return time.Duration(s.cfg.Auth.SessionTTLHours) * time.Hour
+	ttlHours := s.cfg.Auth.SessionTTLHours
+	if ttlHours <= 0 {
+		ttlHours = common.DefaultSessionTTLHours
+	}
+	return time.Duration(ttlHours) * time.Hour
 }
 
 // IsConfigured returns true when at least one user account exists.
@@ -400,6 +552,11 @@ func (s AuthService) ResetPasswordWithRecovery(email, recoveryKey, newPassword s
 	}
 	if err := database.DB.Save(&settings).Error; err != nil {
 		return "", Internal("Failed to update recovery key", err)
+	}
+	if err := database.DB.Model(&models.RefreshSession{}).
+		Where("user_id = ? AND revoked_at IS NULL", user.ID).
+		Update("revoked_at", time.Now().UTC()).Error; err != nil {
+		return "", Internal("Failed to revoke refresh sessions", err)
 	}
 
 	return newRec, nil

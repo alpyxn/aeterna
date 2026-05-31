@@ -57,6 +57,7 @@ func TestMessageDelete_NoFarewellNoAttachments(t *testing.T) {
 func TestMessageList_IncludesFarewellCounts(t *testing.T) {
 	db := setupTestDB(t)
 	initTestKeyManager(t)
+	lastSeen := time.Date(2024, 1, 10, 12, 0, 0, 0, time.UTC)
 	encrypted, err := (CryptoService{}).Encrypt("hello")
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +65,7 @@ func TestMessageList_IncludesFarewellCounts(t *testing.T) {
 	if err := db.Create(&models.Message{
 		ID: "m-counts", UserID: "u-counts", Content: encrypted, KeyFragment: "v1",
 		ManagementToken: "tok", RecipientEmail: "a@a.com",
-		TriggerDuration: 60, LastSeen: time.Now(), Status: models.StatusTriggered,
+		TriggerDuration: 60, LastSeen: lastSeen, Status: models.StatusTriggered,
 	}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -107,6 +108,65 @@ func TestMessageList_IncludesFarewellCounts(t *testing.T) {
 	}
 	if messages[0].PendingFarewells != 1 {
 		t.Fatalf("expected pending_farewells=1, got %d", messages[0].PendingFarewells)
+	}
+	if messages[0].NextTriggerAt == nil {
+		t.Fatal("expected next_trigger_at to be populated")
+	}
+	expectedTrigger := lastSeen.Add(60 * time.Minute)
+	if !messages[0].NextTriggerAt.Equal(expectedTrigger) {
+		t.Fatalf("expected next_trigger_at=%s, got %s", expectedTrigger.Format(time.RFC3339), messages[0].NextTriggerAt.Format(time.RFC3339))
+	}
+	if messages[0].NextReminderAt != nil {
+		t.Fatalf("expected next_reminder_at to be nil for triggered message, got %s", messages[0].NextReminderAt.Format(time.RFC3339))
+	}
+}
+
+func TestMessageList_ComputesNextReminderAtForPendingReminders(t *testing.T) {
+	db := setupTestDB(t)
+	initTestKeyManager(t)
+	lastSeen := time.Date(2024, 2, 15, 9, 30, 0, 0, time.UTC)
+	encrypted, err := (CryptoService{}).Encrypt("hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.Message{
+		ID: "m-reminder", UserID: "u-reminder", Content: encrypted, KeyFragment: "v1",
+		ManagementToken: "tok", RecipientEmail: "a@a.com",
+		TriggerDuration: 180, LastSeen: lastSeen, Status: models.StatusActive,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, reminder := range []models.MessageReminder{
+		{MessageID: "m-reminder", MinutesBefore: 30, Sent: false},
+		{MessageID: "m-reminder", MinutesBefore: 120, Sent: false},
+		{MessageID: "m-reminder", MinutesBefore: 5, Sent: true},
+	} {
+		if err := db.Create(&reminder).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	messages, err := (MessageService{}).List("u-reminder")
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(messages))
+	}
+	msg := messages[0]
+	if msg.NextTriggerAt == nil {
+		t.Fatal("expected next_trigger_at to be populated")
+	}
+	expectedTrigger := lastSeen.Add(180 * time.Minute)
+	if !msg.NextTriggerAt.Equal(expectedTrigger) {
+		t.Fatalf("expected next_trigger_at=%s, got %s", expectedTrigger.Format(time.RFC3339), msg.NextTriggerAt.Format(time.RFC3339))
+	}
+	if msg.NextReminderAt == nil {
+		t.Fatal("expected next_reminder_at to be populated")
+	}
+	expectedReminder := expectedTrigger.Add(-120 * time.Minute)
+	if !msg.NextReminderAt.Equal(expectedReminder) {
+		t.Fatalf("expected next_reminder_at=%s, got %s", expectedReminder.Format(time.RFC3339), msg.NextReminderAt.Format(time.RFC3339))
 	}
 }
 
