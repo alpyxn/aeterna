@@ -15,6 +15,7 @@ import (
 	"github.com/alpyxn/aeterna/backend/internal/config/common"
 	"github.com/alpyxn/aeterna/backend/internal/database"
 	"github.com/alpyxn/aeterna/backend/internal/models"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -32,6 +33,7 @@ type sessionClaims struct {
 	Iat    int64  `json:"iat"`
 	UserID string `json:"uid"`
 	Hash   string `json:"hash,omitempty"`
+	SID    string `json:"sid,omitempty"`
 }
 
 func (s AuthService) refreshTTL() time.Duration {
@@ -45,6 +47,14 @@ func (s AuthService) refreshTTL() time.Duration {
 func refreshTokenHash(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+func normalizeSessionID(sessionID string) string {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID != "" {
+		return sessionID
+	}
+	return uuid.NewString()
 }
 
 func (s AuthService) passwordHashPrefixForUser(userID string) (string, error) {
@@ -64,6 +74,10 @@ func (s AuthService) passwordHashPrefixForUser(userID string) (string, error) {
 
 // IssueSessionToken creates a session for the given user (tenant).
 func (s AuthService) IssueSessionToken(userID string) (string, time.Time, error) {
+	return s.issueSessionTokenWithSessionID(userID, uuid.NewString())
+}
+
+func (s AuthService) issueSessionTokenWithSessionID(userID, sessionID string) (string, time.Time, error) {
 	hashPrefix, err := s.passwordHashPrefixForUser(userID)
 	if err != nil {
 		return "", time.Time{}, err
@@ -77,6 +91,7 @@ func (s AuthService) IssueSessionToken(userID string) (string, time.Time, error)
 		Iat:    now.Unix(),
 		UserID: userID,
 		Hash:   hashPrefix,
+		SID:    normalizeSessionID(sessionID),
 	}
 	payload, err := json.Marshal(claims)
 	if err != nil {
@@ -92,11 +107,12 @@ func (s AuthService) IssueSessionToken(userID string) (string, time.Time, error)
 }
 
 func (s AuthService) IssueSessionPair(userID string) (accessToken string, accessExp time.Time, refreshToken string, refreshExp time.Time, err error) {
-	accessToken, accessExp, err = s.IssueSessionToken(userID)
+	sessionID := uuid.NewString()
+	accessToken, accessExp, err = s.issueSessionTokenWithSessionID(userID, sessionID)
 	if err != nil {
 		return "", time.Time{}, "", time.Time{}, err
 	}
-	refreshToken, refreshExp, err = s.issueRefreshSession(database.DB, userID)
+	refreshToken, refreshExp, err = s.issueRefreshSession(database.DB, userID, sessionID)
 	if err != nil {
 		return "", time.Time{}, "", time.Time{}, err
 	}
@@ -124,7 +140,8 @@ func (s AuthService) RefreshSessionPair(refreshToken string) (userID, accessToke
 		return "", "", time.Time{}, "", time.Time{}, NewAPIError(401, "unauthorized", "Refresh token has expired.", nil)
 	}
 
-	accessToken, accessExp, err = s.IssueSessionToken(current.UserID)
+	sessionID := normalizeSessionID(current.SessionID)
+	accessToken, accessExp, err = s.issueSessionTokenWithSessionID(current.UserID, sessionID)
 	if err != nil {
 		return "", "", time.Time{}, "", time.Time{}, err
 	}
@@ -142,7 +159,7 @@ func (s AuthService) RefreshSessionPair(refreshToken string) (userID, accessToke
 			return NewAPIError(401, "unauthorized", "Invalid refresh token.", nil)
 		}
 
-		token, exp, issueErr := s.issueRefreshSession(tx, current.UserID)
+		token, exp, issueErr := s.issueRefreshSession(tx, current.UserID, sessionID)
 		if issueErr != nil {
 			return issueErr
 		}
@@ -191,7 +208,7 @@ func (s AuthService) RevokeRefreshToken(refreshToken string) error {
 	})
 }
 
-func (s AuthService) issueRefreshSession(db *gorm.DB, userID string) (string, time.Time, error) {
+func (s AuthService) issueRefreshSession(db *gorm.DB, userID, sessionID string) (string, time.Time, error) {
 	if err := s.cleanupRefreshSessions(db, time.Now().UTC()); err != nil {
 		return "", time.Time{}, err
 	}
@@ -203,6 +220,7 @@ func (s AuthService) issueRefreshSession(db *gorm.DB, userID string) (string, ti
 	exp := time.Now().UTC().Add(s.refreshTTL())
 	record := models.RefreshSession{
 		UserID:    userID,
+		SessionID: normalizeSessionID(sessionID),
 		TokenHash: refreshTokenHash(token),
 		ExpiresAt: exp,
 	}
@@ -210,6 +228,27 @@ func (s AuthService) issueRefreshSession(db *gorm.DB, userID string) (string, ti
 		return "", time.Time{}, Internal("Failed to create refresh session", err)
 	}
 	return token, exp, nil
+}
+
+func (s AuthService) SessionKeyFromToken(token string) string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return ""
+	}
+
+	decrypted, err := cryptoService.Decrypt(token)
+	if err != nil {
+		return refreshTokenHash(token)
+	}
+
+	var claims sessionClaims
+	if err := json.Unmarshal([]byte(decrypted), &claims); err != nil {
+		return refreshTokenHash(token)
+	}
+	if sid := strings.TrimSpace(claims.SID); sid != "" {
+		return refreshTokenHash(sid)
+	}
+	return refreshTokenHash(token)
 }
 
 func (s AuthService) cleanupRefreshSessions(db *gorm.DB, now time.Time) error {

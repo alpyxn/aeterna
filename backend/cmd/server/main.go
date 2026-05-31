@@ -79,8 +79,8 @@ func main() {
 		log.Fatal("Failed to migrate database: ", err)
 	}
 
-	if err := database.MigrateLegacyToMultitenant(database.DB, cfg); err != nil {
-		log.Fatal("Failed to migrate to multi-tenant schema: ", err)
+	if err := database.RunMigrations(database.DB, cfg); err != nil {
+		log.Fatal("Failed to run startup migrations: ", err)
 	}
 
 	if err := services.EnsureApplicationSettingsRow(); err != nil {
