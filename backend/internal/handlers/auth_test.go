@@ -19,6 +19,7 @@ type fakeAuthService struct {
 	verifyToken      string
 	verifyUser       string
 	verifyErr        error
+	sessionKey       string
 	issuedToken      string
 	issuedExp        time.Time
 	issuedRefresh    string
@@ -77,6 +78,13 @@ func (f fakeAuthService) VerifySessionToken(token string) (string, error) {
 		return "", services.NewAPIError(401, "unauthorized", "Unauthorized access. Session required.", nil)
 	}
 	return f.verifyUser, nil
+}
+
+func (f fakeAuthService) SessionKeyFromToken(token string) string {
+	if f.sessionKey != "" {
+		return f.sessionKey
+	}
+	return "session-key"
 }
 
 func (f fakeAuthService) ResetPasswordWithRecovery(email, recoveryKey, newPassword string) (string, error) {

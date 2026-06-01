@@ -39,6 +39,7 @@ func (h *WebhookHandlers) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	webhookStore := withOriginSession(c, h.webhooks)
 	var req webhookRequest
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
@@ -48,7 +49,7 @@ func (h *WebhookHandlers) Create(c *fiber.Ctx) error {
 		Secret:  req.Secret,
 		Enabled: req.Enabled,
 	}
-	created, err := h.webhooks.Create(userID, item)
+	created, err := webhookStore.Create(userID, item)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -60,6 +61,7 @@ func (h *WebhookHandlers) Update(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	webhookStore := withOriginSession(c, h.webhooks)
 	id := c.Params("id")
 	var req webhookRequest
 	if err := c.BodyParser(&req); err != nil {
@@ -70,7 +72,7 @@ func (h *WebhookHandlers) Update(c *fiber.Ctx) error {
 		Secret:  req.Secret,
 		Enabled: req.Enabled,
 	}
-	updated, err := h.webhooks.Update(userID, id, item)
+	updated, err := webhookStore.Update(userID, id, item)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -82,8 +84,9 @@ func (h *WebhookHandlers) Delete(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	webhookStore := withOriginSession(c, h.webhooks)
 	id := c.Params("id")
-	if err := h.webhooks.Delete(userID, id); err != nil {
+	if err := webhookStore.Delete(userID, id); err != nil {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true})

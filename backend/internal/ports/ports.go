@@ -17,6 +17,7 @@ type AuthServicePort interface {
 	RefreshSessionPair(refreshToken string) (userID, accessToken string, accessExp time.Time, nextRefreshToken string, nextRefreshExp time.Time, err error)
 	RevokeRefreshToken(refreshToken string) error
 	VerifySessionToken(token string) (userID string, err error)
+	SessionKeyFromToken(token string) string
 	ResetPasswordWithRecovery(email, recoveryKey, newPassword string) (newRecoveryKey string, err error)
 	AdditionalRegistrationOpen() (bool, error)
 }

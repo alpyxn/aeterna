@@ -22,6 +22,7 @@ func (h *AttachmentHandlers) Upload(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	files := withOriginSession(c, h.files)
 	messageID := c.Params("id")
 
 	fileHeader, err := c.FormFile("file")
@@ -45,7 +46,7 @@ func (h *AttachmentHandlers) Upload(c *fiber.Ctx) error {
 		mimeType = "application/octet-stream"
 	}
 
-	attachment, err := h.files.Upload(userID, messageID, fileHeader.Filename, mimeType, data)
+	attachment, err := files.Upload(userID, messageID, fileHeader.Filename, mimeType, data)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -76,9 +77,10 @@ func (h *AttachmentHandlers) Delete(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	files := withOriginSession(c, h.files)
 	attachmentID := c.Params("attachmentId")
 
-	if err := h.files.Delete(userID, attachmentID); err != nil {
+	if err := files.Delete(userID, attachmentID); err != nil {
 		return writeError(c, err)
 	}
 

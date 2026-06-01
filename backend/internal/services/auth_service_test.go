@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -149,6 +150,90 @@ func TestIssueAndRefreshSessionPair_RotatesRefreshToken(t *testing.T) {
 	}
 }
 
+func TestSessionKeyFromToken_IsStableAcrossRefreshRotation(t *testing.T) {
+	db := setupAuthTestDB(t)
+	initTestKeyManager(t)
+	user := createAuthTestUser(t, db, "u-session-key", "session-key@example.com", "StrongPass1!")
+
+	svc := NewAuthService(config.Config{
+		Auth: config.AuthConfig{
+			SessionTTLHours: 1,
+			RefreshTTLHours: 24,
+		},
+	})
+
+	accessToken, _, refreshToken, _, err := svc.IssueSessionPair(user.ID)
+	if err != nil {
+		t.Fatalf("IssueSessionPair failed: %v", err)
+	}
+	initialKey := svc.SessionKeyFromToken(accessToken)
+	if initialKey == "" {
+		t.Fatal("expected non-empty initial session key")
+	}
+
+	var initialSession models.RefreshSession
+	if err := db.Where("token_hash = ?", refreshTokenHash(refreshToken)).First(&initialSession).Error; err != nil {
+		t.Fatalf("failed to load initial refresh session: %v", err)
+	}
+	if strings.TrimSpace(initialSession.SessionID) == "" {
+		t.Fatal("expected initial refresh session to persist a non-empty session_id")
+	}
+
+	_, rotatedAccessToken, _, rotatedRefreshToken, _, err := svc.RefreshSessionPair(refreshToken)
+	if err != nil {
+		t.Fatalf("RefreshSessionPair failed: %v", err)
+	}
+	rotatedKey := svc.SessionKeyFromToken(rotatedAccessToken)
+	if rotatedKey == "" {
+		t.Fatal("expected non-empty rotated session key")
+	}
+	if rotatedKey != initialKey {
+		t.Fatalf("expected stable session key across refresh, got %q and %q", initialKey, rotatedKey)
+	}
+
+	var rotatedSession models.RefreshSession
+	if err := db.Where("token_hash = ?", refreshTokenHash(rotatedRefreshToken)).First(&rotatedSession).Error; err != nil {
+		t.Fatalf("failed to load rotated refresh session: %v", err)
+	}
+	if rotatedSession.SessionID != initialSession.SessionID {
+		t.Fatalf("expected rotated refresh session_id %q, got %q", initialSession.SessionID, rotatedSession.SessionID)
+	}
+}
+
+func TestSessionKeyFromToken_LegacyTokenFallsBackToTokenHash(t *testing.T) {
+	db := setupAuthTestDB(t)
+	initTestKeyManager(t)
+	user := createAuthTestUser(t, db, "u-legacy-key", "legacy@example.com", "StrongPass1!")
+	svc := NewAuthService(config.Config{})
+
+	hashPrefix, err := svc.passwordHashPrefixForUser(user.ID)
+	if err != nil {
+		t.Fatalf("passwordHashPrefixForUser failed: %v", err)
+	}
+
+	now := time.Now().UTC()
+	legacyClaims := map[string]any{
+		"exp":  now.Add(time.Hour).Unix(),
+		"iat":  now.Unix(),
+		"uid":  user.ID,
+		"hash": hashPrefix,
+	}
+	payload, err := json.Marshal(legacyClaims)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %v", err)
+	}
+	legacyToken, err := cryptoService.Encrypt(string(payload))
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+
+	got := svc.SessionKeyFromToken(legacyToken)
+	want := refreshTokenHash(legacyToken)
+	if got != want {
+		t.Fatalf("expected legacy fallback session key %q, got %q", want, got)
+	}
+}
+
 func TestRefreshSessionPair_AllowsSingleConcurrentUse(t *testing.T) {
 	db := setupAuthTestDB(t)
 	initTestKeyManager(t)
@@ -211,23 +296,27 @@ func TestIssueSessionPair_CleansUpExpiredAndOldRevokedSessions(t *testing.T) {
 	sessions := []models.RefreshSession{
 		{
 			UserID:    activeUser.ID,
+			SessionID: "cleanup-session-expired",
 			TokenHash: "cleanup-expired",
 			ExpiresAt: now.Add(-1 * time.Hour),
 		},
 		{
 			UserID:    activeUser.ID,
+			SessionID: "cleanup-session-old-revoked",
 			TokenHash: "cleanup-old-revoked",
 			ExpiresAt: now.Add(24 * time.Hour),
 			RevokedAt: &oldRevokedAt,
 		},
 		{
 			UserID:    activeUser.ID,
+			SessionID: "cleanup-session-recent-revoked",
 			TokenHash: "cleanup-recent-revoked",
 			ExpiresAt: now.Add(24 * time.Hour),
 			RevokedAt: &recentRevokedAt,
 		},
 		{
 			UserID:    otherUser.ID,
+			SessionID: "cleanup-session-other-user-active",
 			TokenHash: "cleanup-other-user-active",
 			ExpiresAt: now.Add(24 * time.Hour),
 		},

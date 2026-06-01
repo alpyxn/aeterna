@@ -35,7 +35,7 @@ func MasterAuth(auth ports.AuthServicePort, cfg config.Config) fiber.Handler {
 					return nil
 				}
 				c.Locals(LocalUserIDKey, userID)
-				c.Locals(LocalSessionKey, SessionKeyFromToken(token))
+				c.Locals(LocalSessionKey, auth.SessionKeyFromToken(token))
 				return c.Next()
 			}
 			clearSessionCookieWith(c, cookieSecureMode)

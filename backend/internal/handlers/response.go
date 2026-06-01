@@ -3,27 +3,47 @@ package handlers
 import (
 	"errors"
 
-	"github.com/alpyxn/aeterna/backend/internal/config"
+	"github.com/alpyxn/aeterna/backend/internal/middleware"
 	"github.com/alpyxn/aeterna/backend/internal/services"
 	"github.com/gofiber/fiber/v2"
 )
 
-var isProduction bool
+const productionModeLocalKey = "is_production"
 
-// SetIsProduction configures whether the handler package runs in production mode.
-// Call once from main before registering routes.
-func SetIsProduction(cfg config.Config) { isProduction = cfg.IsProduction() }
+// AttachRuntimeFlags stores runtime-only flags in request locals for handler helpers.
+func AttachRuntimeFlags(isProduction bool) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		c.Locals(productionModeLocalKey, isProduction)
+		return c.Next()
+	}
+}
 
 func currentUserID(c *fiber.Ctx) (string, error) {
-	uid, ok := c.Locals("user_id").(string)
+	uid, ok := c.Locals(middleware.LocalUserIDKey).(string)
 	if !ok || uid == "" {
 		return "", services.NewAPIError(401, "unauthorized", "Unauthorized", nil)
 	}
 	return uid, nil
 }
 
+func currentSessionKey(c *fiber.Ctx) string {
+	sessionKey, _ := c.Locals(middleware.LocalSessionKey).(string)
+	return sessionKey
+}
+
+type originScopedService[T any] interface {
+	WithOriginSession(sessionKey string) T
+}
+
+func withOriginSession[T any](c *fiber.Ctx, svc T) T {
+	if aware, ok := any(svc).(originScopedService[T]); ok {
+		return aware.WithOriginSession(currentSessionKey(c))
+	}
+	return svc
+}
+
 func writeError(c *fiber.Ctx, err error) error {
-	isProd := isProduction
+	isProd, _ := c.Locals(productionModeLocalKey).(bool)
 	var apiErr *services.APIError
 	if errors.As(err, &apiErr) {
 		code := apiErr.Code

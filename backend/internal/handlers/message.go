@@ -39,6 +39,7 @@ func (h *MessageHandlers) Create(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	messages := withOriginSession(c, h.messages)
 	req := new(CreateMessageRequest)
 	if err := c.BodyParser(req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
@@ -49,7 +50,7 @@ func (h *MessageHandlers) Create(c *fiber.Ctx) error {
 		recipients = []string{strings.TrimSpace(req.RecipientEmail)}
 	}
 
-	msg, err := h.messages.Create(userID, req.Content, recipients, req.TriggerDuration, req.Reminders)
+	msg, err := messages.Create(userID, req.Content, recipients, req.TriggerDuration, req.Reminders)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -85,6 +86,7 @@ func (h *MessageHandlers) Heartbeat(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	messages := withOriginSession(c, h.messages)
 	req := new(struct {
 		ID string `json:"id"`
 	})
@@ -92,7 +94,7 @@ func (h *MessageHandlers) Heartbeat(c *fiber.Ctx) error {
 		return writeError(c, services.BadRequest("Invalid request body", err))
 	}
 
-	msg, err := h.messages.Heartbeat(userID, req.ID)
+	msg, err := messages.Heartbeat(userID, req.ID)
 	if err != nil {
 		return writeError(c, err)
 	}
@@ -122,8 +124,9 @@ func (h *MessageHandlers) Delete(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	messages := withOriginSession(c, h.messages)
 	id := c.Params("id")
-	if err := h.messages.Delete(userID, id); err != nil {
+	if err := messages.Delete(userID, id); err != nil {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true, "message": "Message deleted successfully"})
@@ -134,6 +137,7 @@ func (h *MessageHandlers) Update(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	messages := withOriginSession(c, h.messages)
 	id := c.Params("id")
 	req := new(UpdateMessageRequest)
 	if err := c.BodyParser(req); err != nil {
@@ -145,7 +149,7 @@ func (h *MessageHandlers) Update(c *fiber.Ctx) error {
 		recipients = []string{strings.TrimSpace(req.RecipientEmail)}
 	}
 
-	msg, err := h.messages.Update(userID, id, req.Content, recipients, req.TriggerDuration, req.Reminders)
+	msg, err := messages.Update(userID, id, req.Content, recipients, req.TriggerDuration, req.Reminders)
 	if err != nil {
 		return writeError(c, err)
 	}

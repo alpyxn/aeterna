@@ -49,6 +49,7 @@ func (h *SettingsHandlers) Save(c *fiber.Ctx) error {
 	if err != nil {
 		return writeError(c, err)
 	}
+	settingsSvc := withOriginSession(c, h.settings)
 	var req models.SettingsRequest
 	if err := c.BodyParser(&req); err != nil {
 		return writeError(c, services.BadRequest("Invalid request body", err))
@@ -58,7 +59,7 @@ func (h *SettingsHandlers) Save(c *fiber.Ctx) error {
 			return writeError(c, err)
 		}
 	}
-	if err := h.settings.Save(userID, req.ToSettings()); err != nil {
+	if err := settingsSvc.Save(userID, req.ToSettings()); err != nil {
 		return writeError(c, err)
 	}
 	return c.JSON(fiber.Map{"success": true})

@@ -12,6 +12,7 @@ type RefreshSession struct {
 	ID                  string     `gorm:"type:text;primaryKey"`
 	UserID              string     `gorm:"type:text;index;not null"`
 	User                User       `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:CASCADE;" json:"-"`
+	SessionID           string     `gorm:"type:text;index"`
 	TokenHash           string     `gorm:"type:text;uniqueIndex;not null"`
 	ExpiresAt           time.Time  `gorm:"index;not null"`
 	RevokedAt           *time.Time `gorm:"index"`
