@@ -53,8 +53,8 @@ Both endpoints are protected and scoped to authenticated `user_id`.
 This guarantees user A never receives user B events.
 
 Current behavior note:
-- The client that triggers the mutation also receives the SSE refresh event.
-- Event filtering by origin session is not applied in the current implementation.
+- The client that triggers the mutation is filtered out when the request and SSE stream share the same session identity.
+- Origin-session filtering is applied in the current implementation.
 
 ## Sequence (Two Devices, Same User)
 
@@ -76,7 +76,7 @@ sequenceDiagram
   W->>API: POST /api/heartbeat {id}
   API->>API: MessageService.Heartbeat()
   API->>HUB: Publish(U1, messages.changed)
-  Note over API,HUB: origin_session_key = hash(session token)
+  Note over API,HUB: origin_session_key = hash(stable session_id)
   HUB--xW: skipped (same origin_session_key)
   HUB-->>A: event: messages.changed
   W->>API: GET /api/messages
@@ -143,6 +143,7 @@ Compatibility note:
 - `resource`, `entity_id`, and `reason` remain at top-level for backward compatibility.
 - New clients should prefer `code` + `data`.
 - `origin_session_key` is internal-only and is not serialized in SSE JSON payloads.
+- The origin-session key is derived from a stable session identifier, so access-token refresh does not break self-event filtering.
 
 ## Event Types
 
