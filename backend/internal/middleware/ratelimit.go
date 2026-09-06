@@ -23,6 +23,11 @@ const (
 	InitialLockDuration = 1 * time.Minute
 	MaxLockDuration     = 15 * time.Minute
 	AttemptWindow       = 5 * time.Minute
+
+	// maxBackoffExponent bounds the exponential-backoff shift. InitialLockDuration
+	// << 10 already exceeds MaxLockDuration, so clamping here changes no observable
+	// behaviour while preventing the shift from overflowing.
+	maxBackoffExponent = 10
 )
 
 // AuthRateLimiter provides brute-force protection for authentication endpoints
@@ -82,11 +87,20 @@ func RecordFailedLogin(ip string) {
 	attempt.Count++
 	attempt.LastTry = now
 
+	// Cap the counter so a persistent prober cannot run it up unbounded.
+	if attempt.Count > MaxLoginAttempts+maxBackoffExponent {
+		attempt.Count = MaxLoginAttempts + maxBackoffExponent
+	}
+
 	if attempt.Count >= MaxLoginAttempts {
-		// Calculate lock duration with exponential backoff
-		lockMultiplier := attempt.Count - MaxLoginAttempts + 1
-		lockDuration := InitialLockDuration * time.Duration(1<<uint(lockMultiplier-1))
-		if lockDuration > MaxLockDuration {
+		// Exponential backoff, computed with a clamped exponent so the shift
+		// can never overflow time.Duration and wrap to a zero/negative lock.
+		exponent := attempt.Count - MaxLoginAttempts
+		if exponent > maxBackoffExponent {
+			exponent = maxBackoffExponent
+		}
+		lockDuration := InitialLockDuration << uint(exponent)
+		if lockDuration <= 0 || lockDuration > MaxLockDuration {
 			lockDuration = MaxLockDuration
 		}
 		attempt.LockedUntil = now.Add(lockDuration)

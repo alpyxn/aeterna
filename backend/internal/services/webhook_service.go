@@ -2,11 +2,13 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"time"
 
@@ -58,11 +60,17 @@ func (s WebhookService) SendTriggerWebhooks(webhooks []models.Webhook, msg model
 		return Internal("Failed to encode webhook payload", err)
 	}
 
-	client := &http.Client{Timeout: 6 * time.Second}
+	client := newWebhookHTTPClient()
 	var lastErr error
 	for _, hook := range webhooks {
 		if hook.URL == "" {
 			lastErr = BadRequest("Webhook URL is required", nil)
+			continue
+		}
+		// Re-validate the stored URL at delivery time (scheme, credentials,
+		// literal private IPs). Host resolution is re-checked at dial time.
+		if _, err := validateWebhookURL(hook.URL, ""); err != nil {
+			lastErr = err
 			continue
 		}
 		secret := ""
@@ -109,4 +117,52 @@ func (s WebhookService) SendTriggerWebhooks(webhooks []models.Webhook, msg model
 	}
 
 	return nil
+}
+
+// newWebhookHTTPClient returns an HTTP client hardened against SSRF for
+// outbound webhook delivery: redirects are not followed, and every TCP
+// connection is dialed only after the resolved IP has been checked against the
+// private/loopback/link-local deny-list at connect time. Dialing the resolved
+// IP directly also closes the DNS-rebinding TOCTOU between resolution and dial.
+func newWebhookHTTPClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, err
+			}
+			if len(ips) == 0 {
+				return nil, errors.New("webhook host resolved to no addresses")
+			}
+			for _, ip := range ips {
+				if err := validateWebhookIP(ip.IP.String()); err != nil {
+					return nil, errors.New("webhook host resolves to a disallowed IP address")
+				}
+			}
+			var lastErr error
+			for _, ip := range ips {
+				conn, err := dialer.DialContext(ctx, network, net.JoinHostPort(ip.IP.String(), port))
+				if err == nil {
+					return conn, nil
+				}
+				lastErr = err
+			}
+			return nil, lastErr
+		},
+	}
+	return &http.Client{
+		Timeout:   6 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 }
