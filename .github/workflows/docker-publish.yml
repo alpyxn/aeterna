@@ -26,12 +26,10 @@ jobs:
             context: ./backend
             dockerfile: ./backend/Dockerfile
             image_name: aeterna-backend
-            platforms: linux/amd64,linux/arm64
           - service: frontend
             context: ./frontend
             dockerfile: ./frontend/Dockerfile
             image_name: aeterna-frontend
-            platforms: linux/amd64,linux/arm64
 
     steps:
       - name: Checkout
@@ -50,29 +48,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: GHCR metadata
-        id: meta_ghcr
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha,prefix=sha-
-
-      - name: Build and push (GHCR)
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          push: true
-          platforms: ${{ matrix.platforms }}
-          tags: ${{ steps.meta_ghcr.outputs.tags }}
-          labels: ${{ steps.meta_ghcr.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
       - name: Login to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/login-action@v3
@@ -80,27 +55,37 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
 
-      - name: Docker Hub metadata
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
-        id: meta_dockerhub
+      - name: Determine target images
+        id: images
+        run: |
+          {
+            echo 'list<<EOF'
+            echo "ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}"
+            if [ -n "${DOCKERHUB_USERNAME}" ] && [ -n "${DOCKERHUB_TOKEN}" ]; then
+              echo "docker.io/${DOCKERHUB_USERNAME}/${{ matrix.image_name }}"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: docker.io/${{ env.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}
+          images: ${{ steps.images.outputs.list }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
             type=ref,event=tag
             type=sha,prefix=sha-
 
-      - name: Build and push (Docker Hub)
-        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
-          platforms: ${{ matrix.platforms }}
-          tags: ${{ steps.meta_dockerhub.outputs.tags }}
-          labels: ${{ steps.meta_dockerhub.outputs.labels }}
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

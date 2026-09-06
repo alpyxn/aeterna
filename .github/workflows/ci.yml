@@ -32,9 +32,6 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: Download dependencies
-        run: go mod download
-
       - name: Run go vet
         run: go vet ./...
 
