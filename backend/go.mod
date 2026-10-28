@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.15
-	github.com/gomarkdown/markdown v0.0.0-20260417124207-7d523f7318df
+	github.com/gomarkdown/markdown v0.0.0-20261026184151-79e163b7b632
 	github.com/google/uuid v1.6.0
 	golang.org/x/crypto v0.56.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
