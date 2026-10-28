@@ -251,8 +251,8 @@ export default function Settings() {
     };
 
     const handleTest = async () => {
-        if (!config.smtp_host || !config.smtp_port || !config.smtp_user || !config.smtp_pass) {
-            setError('SMTP host, port, username, and password are required to test connection');
+        if (!config.smtp_host || !config.smtp_port) {
+            setError('SMTP host and port are required to test connection');
             return;
         }
         setTestLoading(true);
@@ -527,7 +527,7 @@ export default function Settings() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
-                                Username / Email
+                                Username / Email (optional)
                             </label>
                             <Input
                                 placeholder="your@email.com"
@@ -544,7 +544,7 @@ export default function Settings() {
                         </div>
                         <div className="space-y-2">
                             <label className="text-xs font-bold text-dark-500 uppercase tracking-wider">
-                                Password / App Password
+                                Password / App Password (optional)
                             </label>
                             <div className="relative">
                                 <Input
@@ -776,9 +776,7 @@ export default function Settings() {
                             testLoading ||
                             configLoading ||
                             !config.smtp_host ||
-                            !config.smtp_port ||
-                            !config.smtp_user ||
-                            !config.smtp_pass
+                            !config.smtp_port
                         }
                     >
                         {testLoading ? (

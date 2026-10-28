@@ -60,8 +60,12 @@ func (s MessageService) Create(userID string, content string, recipientEmails []
 	if err != nil {
 		return models.Message{}, err
 	}
-	if settings.SMTPUser == "" || settings.SMTPHost == "" {
+	if settings.SMTPHost == "" {
 		return models.Message{}, BadRequest("SMTP_NOT_CONFIGURED: SMTP is not configured. Please go to Settings to configure your email server.", nil)
+	}
+	// Servers without authentication have no username to fall back on as the sender address.
+	if settings.SMTPUser == "" && settings.SMTPFrom == "" {
+		return models.Message{}, BadRequest("SMTP_NOT_CONFIGURED: A From address is required when no SMTP username is set. Please go to Settings to configure your email server.", nil)
 	}
 
 	if err := msgSettingsService.TestSMTP(settings); err != nil {

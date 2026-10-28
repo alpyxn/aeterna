@@ -126,9 +126,6 @@ func (s SettingsService) TestSMTP(req models.Settings) error {
 	if req.SMTPHost == "" || req.SMTPPort == "" {
 		return BadRequest("SMTP host and port are required", nil)
 	}
-	if req.SMTPUser == "" || req.SMTPPass == "" {
-		return BadRequest("SMTP username and password are required for test", nil)
-	}
 
 	addr := req.SMTPHost + ":" + req.SMTPPort
 	tlsConfig := &tls.Config{ServerName: req.SMTPHost}
@@ -164,11 +161,14 @@ func (s SettingsService) TestSMTP(req models.Settings) error {
 	}
 	defer client.Close()
 
-	auth := smtp.PlainAuth("", req.SMTPUser, req.SMTPPass, req.SMTPHost)
-	if err := client.Auth(auth); err != nil {
-		loginAuth := LoginAuth(req.SMTPUser, req.SMTPPass)
-		if loginErr := client.Auth(loginAuth); loginErr != nil {
-			return BadRequest("Authentication failed", err)
+	// Unauthenticated relays (e.g. a LAN server) are supported when no username is set.
+	if req.SMTPUser != "" {
+		auth := smtp.PlainAuth("", req.SMTPUser, req.SMTPPass, req.SMTPHost)
+		if err := client.Auth(auth); err != nil {
+			loginAuth := LoginAuth(req.SMTPUser, req.SMTPPass)
+			if loginErr := client.Auth(loginAuth); loginErr != nil {
+				return BadRequest("Authentication failed", err)
+			}
 		}
 	}
 

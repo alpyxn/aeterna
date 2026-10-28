@@ -203,8 +203,12 @@ func (s EmailService) sendWithRetry(sendFn func() error) error {
 	return lastErr
 }
 
-// authWithFallback tries PLAIN auth first, then LOGIN auth as fallback
+// authWithFallback tries PLAIN auth first, then LOGIN auth as fallback.
+// It is a no-op when no username is configured (unauthenticated relay).
 func authWithFallback(client *smtp.Client, username, password, host string) error {
+	if username == "" {
+		return nil
+	}
 	// Try PLAIN auth first
 	auth := smtp.PlainAuth("", username, password, host)
 	if err := client.Auth(auth); err != nil {
@@ -275,7 +279,7 @@ func (s EmailService) sendEmailSTARTTLS(settings models.Settings, addr, from str
 		if err = client.StartTLS(tlsConfig); err != nil {
 			return fmt.Errorf("STARTTLS failed: %v", err)
 		}
-	} else {
+	} else if settings.SMTPUser != "" {
 		return fmt.Errorf("STARTTLS is required but the SMTP server (%s) does not support it; refusing to send credentials in plaintext", settings.SMTPHost)
 	}
 
